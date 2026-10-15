@@ -36,23 +36,27 @@ xcrun stapler validate release/Tavrix-<version>-arm64.dmg
 Status: configured but not yet run end to end, because no certificate was available when this was written.
 For CI, use `CSC_LINK` (base64 `.p12`), `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` instead of the keychain.
 
-## Publishing a release (this is what triggers the update notice)
-Installed apps learn about a new version from the **latest GitHub Release**, not from a push. After tagging:
+## Publishing a release (this is what triggers the update notice and the website)
+Installed apps learn about a new version from the **latest GitHub Release**, not from a push, and the website is rebuilt from it automatically (see [WEBSITE.md](WEBSITE.md)). After the version pull request is merged and tagged (below):
 ```bash
 npm run dist                                   # release/Tavrix-<version>-arm64.dmg and -x64.dmg
 shasum -a 256 release/Tavrix-<version>-*.dmg
-gh release create vX.Y.Z release/Tavrix-X.Y.Z-arm64.dmg release/Tavrix-X.Y.Z-x64.dmg --title "Tavrix X.Y.Z" --notes-file notes.md
+# Create it as a DRAFT, upload, then publish: the website update starts when the release is published, so the installers
+# must already be attached.
+gh release create vX.Y.Z release/Tavrix-X.Y.Z-arm64.dmg release/Tavrix-X.Y.Z-x64.dmg --draft --title "Tavrix X.Y.Z" --notes-file notes.md
+gh release edit vX.Y.Z --draft=false --latest
 ```
-Name the files so the CPU is the last part before `.dmg` (`-arm64.dmg`, `-x64.dmg`); the update notice uses that to pick the right one. Put the changelog entry, both SHA-256 values and the "unsigned: right-click > Open" note in the release notes. The tag must be plain `vX.Y.Z` (no `-beta`); other tags are ignored by the app. Mark pre-releases as pre-release so they are not "latest".
+Name the files so the CPU is the last part before `.dmg` (`-arm64.dmg`, `-x64.dmg`); the update notice and the website use that. Put the changelog entry, both SHA-256 values and the first-launch ("Open Anyway") note in the release notes. **Write the highlights as the first bullets** (`- …`), before any table: the website shows up to six of them as "What's new". The tag must be plain `vX.Y.Z` (no `-beta`); the app and the website ignore other tags and pre-releases.
 
 ## Documentation and screenshots
 `docs/MANUAL.md` is the single source for the manual. `npm run build` turns it into `src/renderer/manual.html` (git-ignored) for the in-app Manual window, and GitHub shows the same file. Screenshots live in `docs/images/` and are packaged with the app (about 1.7 MB). When the interface changes, retake the affected screenshots (they are plain PNG/JPEG files; the demo used for them is a scratch server with made-up sessions) and keep the file names the manual refers to.
 
-## Cutting a version
-1. Update `CHANGELOG.md` and `docs/ROADMAP.md`.
-2. `npm version <x.y.z> --no-git-tag-version`, run `npm test`.
-3. Commit, `git tag vX.Y.Z`, `git push origin main vX.Y.Z`.
-4. Build the installer and attach it to a GitHub release if you want to distribute it (the `.dmg` is about 230 MB).
+## Cutting a version (main is protected)
+Nobody, including the owner, pushes to `main` or `site` directly; changes go through a pull request that must pass CI.
+1. `git switch -c release/X.Y.Z`, update `CHANGELOG.md` and `docs/ROADMAP.md`, then `npm version X.Y.Z --no-git-tag-version`.
+2. `npm test` locally, commit, `git push -u origin release/X.Y.Z`, and open a pull request (`gh pr create`).
+3. When the **test** check is green, merge it (`gh pr merge --squash`). Tags are not restricted, so tag the merge commit: `git switch main && git pull && git tag vX.Y.Z && git push origin vX.Y.Z`.
+4. Build and publish the release as above. The website updates itself.
 
 ## Notes
 - ssh2's optional native crypto addon and `cpu-features` are excluded from the bundle; ssh2 uses its JavaScript fallback (speed on a fast local link drops, connection time is unchanged).

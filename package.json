@@ -12,7 +12,8 @@
     "test": "npm run build && node --test dist/main/*.test.js",
     "dist": "npm run build && electron-builder --mac -c.mac.identity=- -c.mac.hardenedRuntime=false && node scripts/shrink-dmg.mjs",
     "dist:dir": "npm run build && electron-builder --mac --dir -c.mac.identity=- -c.mac.hardenedRuntime=false",
-    "dist:release": "npm run build && electron-builder --mac -c.mac.notarize=true"
+    "dist:release": "npm run build && electron-builder --mac -c.mac.notarize=true",
+    "test:site": "node --test scripts/build-site.test.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
@@ -32,7 +33,7 @@
   "build": {
     "appId": "app.tavrix.desktop",
     "productName": "Tavrix",
-    "copyright": "Copyright © 2026 Tavrix contributors",
+    "copyright": "Copyright \u00a9 2026 Tavrix contributors",
     "directories": {
       "output": "release",
       "buildResources": "build"

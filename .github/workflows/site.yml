@@ -1,0 +1,60 @@
+name: Website
+
+# Rebuilds the website from the latest GitHub release and publishes it to the `site` branch, which Hostinger deploys.
+# Runs when a release is published or edited, when the website source on main changes, or by hand.
+
+on:
+  release:
+    types: [published, edited]
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - 'scripts/build-site.mjs'
+      - '.github/workflows/site.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: website
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # Always build from main, even for a release event (which would otherwise check out the release's tag).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Build the site from the latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # --wait: a release is announced a moment before its installers finish uploading
+        run: node scripts/build-site.mjs --out dist-site --site-url https://tavrix.farookhridoy.com --wait
+      - name: Publish to the site branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git clone --quiet --depth 1 --branch site "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" site-branch
+          rsync -a --delete --exclude '.git' dist-site/ site-branch/
+          cd site-branch
+          git add -A
+          if git diff --cached --quiet; then
+            echo "The website is already up to date."
+            exit 0
+          fi
+          version="$(node -p "require('./latest.json').version")"
+          git commit --quiet -m "Update website for v${version}"
+          git push --quiet origin site
+          echo "Published website for v${version}."

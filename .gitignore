@@ -5,3 +5,4 @@ dist/
 .env
 release/
 src/renderer/manual.html
+dist-site/

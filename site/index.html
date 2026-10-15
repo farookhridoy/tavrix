@@ -9,13 +9,13 @@
 <meta name="color-scheme" content="dark">
 <link rel="icon" href="/favicon.png" type="image/png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<link rel="canonical" href="__SITE_URL__/">
+<link rel="canonical" href="{{site_url}}/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Tavrix">
 <meta property="og:title" content="Tavrix: SSH terminal, file manager and editor for Mac">
 <meta property="og:description" content="One Mac window for your servers: terminal, drag-and-drop files and a tabbed editor. Free and open source.">
-<meta property="og:url" content="__SITE_URL__/">
-<meta property="og:image" content="__SITE_URL__/og.png">
+<meta property="og:url" content="{{site_url}}/">
+<meta property="og:image" content="{{site_url}}/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
@@ -31,6 +31,9 @@
   "license": "https://opensource.org/licenses/MIT",
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
   "author": { "@type": "Person", "name": "MD. Omar Farook Hridoy", "url": "https://farookhridoy.com" },
+  "softwareVersion": "{{version}}",
+  "dateModified": "{{released_iso}}",
+  "downloadUrl": "{{arm64_url}}",
   "codeRepository": "https://github.com/farookhridoy/tavrix"
 }
 </script>
@@ -58,10 +61,10 @@
       <h1>Your servers,<br>in one window.</h1>
       <p class="lead">Tavrix puts an <strong>SSH terminal</strong>, a <strong>file manager</strong> you can drag files into, and an <strong>editor with tabs</strong> side by side. Connect, change a file, save it straight back to the server.</p>
       <div class="cta" id="hero-cta">
-        <a class="btn primary" href="#download" data-download="arm64">Download for Apple Silicon</a>
-        <a class="btn" href="#download" data-download="x64">Intel Mac</a>
+        <a class="btn primary" href="{{arm64_url}}" data-download="arm64">Download for Apple Silicon</a>
+        <a class="btn" href="{{x64_url}}" data-download="x64">Intel Mac</a>
       </div>
-      <p class="meta" id="hero-meta">macOS · Apple Silicon and Intel · MIT license</p>
+      <p class="meta" id="hero-meta">Version {{version}} · macOS, Apple Silicon and Intel · MIT license</p>
       <figure class="shot hero-shot">
         <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
         <img src="/img/main-window.jpg" alt="The Tavrix window: saved sessions on the left, a file panel and a terminal in the middle, and an editor with several open files below" width="1700" height="1050" fetchpriority="high">
@@ -150,28 +153,34 @@
   <section id="download" class="section">
     <div class="wrap">
       <h2>Download Tavrix</h2>
-      <p class="sub" id="dl-version">Latest version from GitHub Releases.</p>
+      <p class="sub" id="dl-version">Version {{version}} · released {{released}} · <a href="{{notes_url}}" rel="noopener">release notes</a></p>
 
       <div class="dl-grid" id="dl-grid">
         <article class="dl" data-arch="arm64">
           <h3>Apple Silicon</h3>
           <p class="dl-note">Macs with an M1 chip or later</p>
-          <a class="btn primary" href="https://github.com/farookhridoy/tavrix/releases/latest" data-download="arm64">Download for Apple Silicon</a>
-          <p class="dl-file"><span data-file="arm64">Tavrix-…-arm64.dmg</span> <span data-size="arm64"></span></p>
-          <p class="dl-sha" data-sha="arm64"></p>
+          <a class="btn primary" href="{{arm64_url}}" data-download="arm64">Download for Apple Silicon</a>
+          <p class="dl-file"><span data-file="arm64">{{arm64_name}}</span> <span data-size="arm64">· {{arm64_size}}</span></p>
+          <p class="dl-sha" data-sha="arm64">{{arm64_sha_line}}</p>
         </article>
         <article class="dl" data-arch="x64">
           <h3>Intel</h3>
           <p class="dl-note">Macs with an Intel processor</p>
-          <a class="btn" href="https://github.com/farookhridoy/tavrix/releases/latest" data-download="x64">Download for Intel</a>
-          <p class="dl-file"><span data-file="x64">Tavrix-…-x64.dmg</span> <span data-size="x64"></span></p>
-          <p class="dl-sha" data-sha="x64"></p>
+          <a class="btn" href="{{x64_url}}" data-download="x64">Download for Intel</a>
+          <p class="dl-file"><span data-file="x64">{{x64_name}}</span> <span data-size="x64">· {{x64_size}}</span></p>
+          <p class="dl-sha" data-sha="x64">{{x64_sha_line}}</p>
         </article>
       </div>
       <p class="hint">Not sure which one? Open the Apple menu → <strong>About This Mac</strong>. If it says "Chip: Apple M…" choose Apple Silicon; if it says "Processor: Intel…" choose Intel.</p>
       <p class="hint" id="not-mac" hidden>Tavrix runs on macOS only. You can still bookmark this page for later.</p>
 
-      <noscript><p class="hint">JavaScript is off, so the version cannot be shown here. <a href="https://github.com/farookhridoy/tavrix/releases/latest">Get the latest installers on GitHub</a>.</p></noscript>
+
+      <!--whatsnew-->
+      <div class="whatsnew">
+        <h3>What's new in {{version}}</h3>
+        {{whatsnew}}
+      </div>
+      <!--/whatsnew-->
 
       <div class="steps">
         <h3>Install in three steps</h3>
