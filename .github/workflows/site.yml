@@ -14,8 +14,10 @@ on:
       - '.github/workflows/site.yml'
   workflow_dispatch:
 
+# The job only reads (the release and the repository). It publishes with a dedicated deploy key, the one identity the
+# `site` branch ruleset lets through; the built-in token cannot write there.
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: website
@@ -42,11 +44,18 @@ jobs:
       - name: Publish to the site branch
         env:
           GH_TOKEN: ${{ github.token }}
+          SITE_DEPLOY_KEY: ${{ secrets.SITE_DEPLOY_KEY }}
         run: |
           set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SITE_DEPLOY_KEY" > ~/.ssh/site_deploy_key
+          chmod 600 ~/.ssh/site_deploy_key
+          # GitHub's real SSH host keys, fetched over the authenticated API rather than trusted on first use
+          gh api meta -q '.ssh_keys[]' | sed 's/^/github.com /' > ~/.ssh/known_hosts
+          export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/site_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git clone --quiet --depth 1 --branch site "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" site-branch
+          git clone --quiet --depth 1 --branch site "git@github.com:${GITHUB_REPOSITORY}.git" site-branch
           rsync -a --delete --exclude '.git' dist-site/ site-branch/
           cd site-branch
           git add -A
