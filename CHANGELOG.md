@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.6.0
+- **Password logins use one connection.** Before, a session with no saved password connected once just to find out it needed a password, hung up, and connected again (and every typo cost another full connection). The password is now asked for on the same connection, like OpenSSH, with up to 3 tries. This matters on servers with brute-force protection (fail2ban, firewall rate limits) that count connections or failed logins per IP. Key logins already used one connection per session.
+- Servers that only accept **keyboard-interactive** (common with PAM) now work, including one-time-code prompts.
+- A server that does not accept passwords at all is now explained ("it offers: publickey. Use a private key.") instead of "All configured authentication methods failed", and no password is sent to it.
+- The connect timeout no longer runs while you are typing a password or answering the host-key question.
+- A blank password field is no longer sent as an empty password.
+- **Fix: closing the window while a session was open could throw "Uncaught Exception: Object has been destroyed"** (the connection's shutdown notified a window that was already gone). All window messages are now guarded, and closing a window ends its sessions.
+
 ## 1.5.1
 - Update notice: Tavrix now also looks for a new release when you come back to its window (at most once an hour). Before, it only checked at launch and every 12 hours, so a release published while the app was already open went unnoticed.
 - **Later** now stays dismissed for that version until you restart the app or choose **Check for Updates…**; a still newer release is announced as usual.

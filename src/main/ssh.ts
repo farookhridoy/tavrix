@@ -1,4 +1,5 @@
 import { Client, ClientChannel, SFTPWrapper, FileEntryWithStats, utils } from 'ssh2';
+import type { AuthHandlerMiddleware } from 'ssh2';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { promises as fsp } from 'node:fs';
@@ -126,27 +127,157 @@ export class JumpHostError extends Error {
   }
 }
 
+/** Asks the user for a password, or for another answer the server wants (one-time code); null means they cancelled. */
+export type SecretPrompt = (q: { label: string; previousFailed: boolean; secret: boolean }) => Promise<string | null>;
+
+/** Login was refused, or this server does not take passwords at all. Not a reason to ask for a password again. */
+export class AuthFailedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AuthFailedError';
+  }
+}
+
+export class ConnectCancelledError extends Error {
+  constructor() {
+    super('Cancelled');
+    this.name = 'ConnectCancelledError';
+  }
+}
+
+/** A timeout that is only counted while the program, not the user, is the one being waited for. */
+class Deadline {
+  private timer?: NodeJS.Timeout;
+  constructor(
+    private readonly ms: number,
+    private readonly onExpire: () => void,
+  ) {
+    this.resume();
+  }
+  pause(): void {
+    clearTimeout(this.timer);
+  }
+  resume(): void {
+    clearTimeout(this.timer);
+    if (this.ms > 0) this.timer = setTimeout(this.onExpire, this.ms);
+  }
+  stop(): void {
+    clearTimeout(this.timer);
+  }
+  /** Run something that waits for the user (a dialog) without the clock running. */
+  async whilePaused<T>(work: () => Promise<T>): Promise<T> {
+    this.pause();
+    try {
+      return await work();
+    } finally {
+      this.resume();
+    }
+  }
+}
+
+const MAX_PASSWORD_TRIES = 3;
+
+/**
+ * Password login on one connection, like OpenSSH: ask the server what it accepts ("none" is not counted as a failed
+ * login), try a saved password first, then ask the user, up to three times. Servers that only offer
+ * keyboard-interactive get their prompts answered the same way. Reasons for giving up go to `fail` so the caller can
+ * report them instead of ssh2's generic "all methods failed".
+ */
+function makeAuthHandler(req: ConnectRequest, prompt: SecretPrompt, fail: (e: Error) => void): AuthHandlerMiddleware {
+  let attempts = 0;
+  let password = req.password; // a saved password goes first, without bothering the user
+  let gaveUp = false;
+  return (authsLeft, _partial, next) => {
+    // ssh2 accepts `false` to stop trying, though its type declarations leave it out.
+    const stop = (): void => (next as unknown as (v: false) => void)(false);
+    const give = (e: Error): void => {
+      gaveUp = true;
+      fail(e);
+      stop();
+    };
+    if (gaveUp) return void stop();
+    if (!authsLeft) return void next('none'); // first call: ssh2 has not heard from the server yet
+    const canPassword = authsLeft.includes('password');
+    const canKeyboard = authsLeft.includes('keyboard-interactive');
+    if (!canPassword && !canKeyboard) {
+      return give(new AuthFailedError(`The server does not accept password login (it offers: ${authsLeft.join(', ') || 'nothing'}). Use a private key.`));
+    }
+    if (attempts >= MAX_PASSWORD_TRIES) return give(new AuthFailedError('Authentication failed'));
+    const previousFailed = attempts > 0;
+    attempts++;
+    const ask = (label: string, secret: boolean): Promise<string | null> => prompt({ label, previousFailed, secret });
+    if (canPassword) {
+      const answer = attempts === 1 && password !== undefined ? Promise.resolve<string | null>(password) : ask('Password', true);
+      answer.then(
+        (value) => {
+          if (value === null) return give(new ConnectCancelledError());
+          password = value;
+          next({ type: 'password', username: req.username, password: value });
+        },
+        (err) => give(err instanceof Error ? err : new Error(String(err))),
+      );
+      return;
+    }
+    next({
+      type: 'keyboard-interactive',
+      username: req.username,
+      prompt: (_name, _instructions, _lang, prompts, finish) => {
+        void (async () => {
+          const answers: string[] = [];
+          for (const p of prompts) {
+            const isPassword = /password/i.test(p.prompt);
+            const value = isPassword && attempts === 1 && password !== undefined ? password : await ask(p.prompt.replace(/[:\s]+$/, '') || 'Password', !p.echo);
+            if (value === null) {
+              gaveUp = true; // answer nothing; the server refuses and the handler is called once more to stop
+              fail(new ConnectCancelledError());
+              return finish([]);
+            }
+            if (isPassword) password = value;
+            answers.push(value);
+          }
+          finish(answers);
+        })().catch(() => finish([]));
+      },
+    });
+  };
+}
+
 function connectClient(
   client: Client,
   req: ConnectRequest,
   verifyHost: (sha256Hex: string) => Promise<boolean>,
   sock?: Duplex,
+  promptSecret?: SecretPrompt,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    client.once('ready', () => resolve());
+    let authError: Error | undefined;
+    // Our own clock instead of ssh2's, so time spent in the host-key dialog or typing a password does not count.
+    const deadline = new Deadline((req.connectTimeoutSec ?? DEFAULT_CONNECTION.connectTimeoutSec) * 1000, () => {
+      reject(new Error('Timed out while waiting for handshake'));
+      client.destroy();
+    });
+    client.once('ready', () => {
+      deadline.stop();
+      resolve();
+    });
     // Stay subscribed for the life of the client: ssh2 may report more than one error (for example a keep-alive timeout
     // followed by "connection lost"), and an error event nobody listens to would crash the app. Rejecting twice is harmless;
     // a dropped connection is reported through the 'close' event.
-    client.on('error', reject);
+    client.on('error', (err: Error & { level?: string }) => {
+      deadline.stop();
+      reject(err.level === 'client-authentication' && authError ? authError : err);
+    });
+    const prompt: SecretPrompt | undefined = promptSecret && !req.privateKeyPath ? (q) => deadline.whilePaused(() => promptSecret(q)) : undefined;
     client.connect({
       host: req.host,
       port: req.port,
       username: req.username,
-      password: req.password,
+      password: prompt ? undefined : req.password,
+      authHandler: prompt ? makeAuthHandler(req, prompt, (e) => void (authError ??= e)) : undefined,
       privateKey: req.privateKeyPath ? loadPrivateKey(req.privateKeyPath, req.passphrase) : undefined,
       passphrase: req.passphrase,
       sock,
-      readyTimeout: (req.connectTimeoutSec ?? DEFAULT_CONNECTION.connectTimeoutSec) * 1000,
+      readyTimeout: 0, // replaced by the deadline above
       // A dead link is noticed after about three missed probes instead of hanging; 0 turns this off.
       keepaliveInterval: (req.keepAliveSec ?? DEFAULT_CONNECTION.keepAliveSec) * 1000,
       keepaliveCountMax: 3,
@@ -154,7 +285,7 @@ function connectClient(
       hostHash: 'sha256',
       // ssh2 uses the callback when the function returns undefined.
       hostVerifier: ((hash: string, cb: (ok: boolean) => void): undefined => {
-        verifyHost(hash).then(cb, () => cb(false));
+        deadline.whilePaused(() => verifyHost(hash)).then(cb, () => cb(false));
       }) as unknown as (hash: string) => boolean,
     });
   });
@@ -169,7 +300,7 @@ export class Session {
   readonly forwards = new Forwards(this.client);
 
   /** Connect to req, passing through each hop in order (outermost first). */
-  async connect(req: ConnectRequest, verifyHost: Hop['verify'], jumps: Hop[] = []): Promise<void> {
+  async connect(req: ConnectRequest, verifyHost: Hop['verify'], jumps: Hop[] = [], promptSecret?: SecretPrompt): Promise<void> {
     const chain: Hop[] = [...jumps, { req, verify: verifyHost }];
     let via: Client | undefined;
     try {
@@ -180,7 +311,7 @@ export class Session {
         if (!last) this.jumpClients.push(client);
         try {
           const sock = via ? await this.openChannel(via, hop.req) : undefined;
-          await connectClient(client, hop.req, hop.verify, sock);
+          await connectClient(client, hop.req, hop.verify, sock, last ? promptSecret : undefined);
         } catch (err) {
           throw last ? err : new JumpHostError(hop.req, err);
         }

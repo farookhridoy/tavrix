@@ -700,7 +700,7 @@ async function connect(input, title) {
   let attempt = input;
   for (let tries = 0; tries < 3; tries++) {
     try {
-      const res = await window.api.connect(attempt);
+      const res = await window.api.connect({ ...attempt, title });
       tab.sid = res.id;
       bySid.set(res.id, tab);
       tab.msgEl.textContent = 'Connected';
@@ -709,9 +709,9 @@ async function connect(input, title) {
       return;
     } catch (err) {
       const text = String(err.message || err);
-      const m = /NEEDS_SECRET:(password|passphrase)(?::([^\n]*))?/.exec(text);
+      const m = /NEEDS_SECRET:(passphrase)(?::([^\n]*))?/.exec(text);
       if (!m) return connectFailed(tab, text.replace(/^Error invoking remote method '[^']*': (Error: )?/, ''));
-      const what = m[1] === 'password' ? 'Password' : 'Key passphrase';
+      const what = 'Key passphrase';
       tab.msgEl.textContent = 'Waiting for ' + what.toLowerCase();
       const secret = await ask(`${m[2] ? m[2] + '. ' : ''}${what} for ${title}`, '', { secret: true });
       if (!secret) return connectFailed(tab, 'Cancelled');
@@ -735,6 +735,15 @@ async function connectFailed(tab, message) {
   const pane = tab.panes[0] || (await addPane(tab, { shell: false }));
   pane.term.write('\r\n\x1b[31mConnection failed:\x1b[0m ' + message + '\r\n');
 }
+
+// The server is asking for a password (or a one-time code) in the middle of logging in. One prompt at a time.
+let promptChain = Promise.resolve();
+window.api.onNeedSecret((q) => {
+  promptChain = promptChain.then(async () => {
+    const value = await ask(`${q.previousFailed ? 'Authentication failed. ' : ''}${q.label} for ${q.title}`, '', { secret: q.secret });
+    window.api.replySecret(q.reqId, value);
+  });
+});
 
 window.api.onData((id, shellId, d) => {
   const { pane } = paneByShell(id, shellId);

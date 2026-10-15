@@ -1,9 +1,9 @@
-import { app, BrowserWindow, ipcMain, dialog, shell, Menu, IpcMainInvokeEvent, MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, shell, Menu, IpcMainInvokeEvent, MenuItemConstructorOptions, WebContents } from 'electron';
 import { join } from 'node:path';
 import { homedir, userInfo } from 'node:os';
 import { readFileSync, existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { Session, ConnectRequest, Progress, KeyPassphraseError, JumpHostError, Hop, FileStat, inspectKeyFile } from './ssh';
+import { Session, ConnectRequest, Progress, KeyPassphraseError, JumpHostError, Hop, FileStat, inspectKeyFile, SecretPrompt, AuthFailedError, ConnectCancelledError } from './ssh';
 import type { ForwardSpec } from './forwards';
 import { parseSshConfig } from './sshconfig';
 import {
@@ -25,9 +25,19 @@ import {
 import { sanitizeConnection, sanitizeTerminal, sanitizeFolder, startupInput, DEFAULT_TERMINAL, DEFAULT_CONNECTION } from './prefs';
 import { checkForUpdate, openTarget, FEED_URL, UpdateInfo } from './updates';
 
+/**
+ * Send to a window, if it still exists. Connections report back from timers and sockets that can outlive the window
+ * (closing it ends its sessions, and their last events arrive afterwards); sending to a destroyed window throws.
+ */
+function notify(contents: WebContents, channel: string, ...args: unknown[]): void {
+  if (!contents.isDestroyed()) contents.send(channel, ...args);
+}
+
 const sessions = new Map<string, Session>();
 /** Startup input per connection, typed into the first shell opened on it and then forgotten. */
 const pendingStartup = new Map<string, string>();
+/** Password prompts waiting for an answer from the window, by request id. */
+const secretWaiters = new Map<string, (value: string | null) => void>();
 
 interface ConnectInput extends Partial<ConnectRequest> {
   profileId?: string;
@@ -35,6 +45,8 @@ interface ConnectInput extends Partial<ConnectRequest> {
   jumpHostId?: string;
   /** Password or key passphrase typed at connect time; never persisted. */
   secret?: string;
+  /** Shown in password prompts so you know which session is asking. */
+  title?: string;
   /** For an unsaved connection: typed into the first shell. */
   startupDir?: string;
   startupCommand?: string;
@@ -59,7 +71,8 @@ function resolveRequest(input: ConnectInput): ConnectRequest {
   if (!host) throw new Error('Host is required');
   const defaults = getSettings().connection;
   const own = sanitizeConnection(base);
-  const secret = input.secret ?? input.password ?? (input.profileId ? readProfileSecret(input.profileId) : undefined);
+  // A blank field means "nothing typed", not an empty password; it must not use up a login attempt.
+  const secret = input.secret || input.password || (input.profileId ? readProfileSecret(input.profileId) : undefined) || undefined;
   return {
     host,
     port: port || 22,
@@ -113,13 +126,11 @@ function readProfileSecret(id: string): string | undefined {
 
 /** Turn "we need a secret from the user" failures into a marker the renderer can act on. */
 function classifyConnectError(err: unknown, req: ConnectRequest): Error {
-  if (err instanceof JumpHostError) return err; // a jump host problem is never a prompt for the destination's secret
+  // Jump-host problems, refused logins and cancelled prompts are final answers, not a reason to connect again.
+  if (err instanceof JumpHostError || err instanceof AuthFailedError || err instanceof ConnectCancelledError) return err;
   const msg = err instanceof Error ? err.message : String(err);
   if (err instanceof KeyPassphraseError) {
     return new Error(`${NEEDS_SECRET}:passphrase${err.reason === 'wrong' ? ':Wrong passphrase' : ''}`);
-  }
-  if (!req.privateKeyPath && /all configured authentication methods failed/i.test(msg)) {
-    return new Error(`${NEEDS_SECRET}:password${req.password ? ':Authentication failed' : ''}`);
   }
   return err instanceof Error ? err : new Error(msg);
 }
@@ -182,7 +193,7 @@ const feedUrl = (): string => (!app.isPackaged && process.env.TAVRIX_UPDATE_URL)
 
 function announceUpdate(): void {
   if (!pendingUpdate) return;
-  for (const w of BrowserWindow.getAllWindows()) w.webContents.send('update:available', pendingUpdate);
+  for (const w of BrowserWindow.getAllWindows()) notify(w.webContents, 'update:available', pendingUpdate);
 }
 
 async function runUpdateCheck(manual: boolean): Promise<void> {
@@ -233,7 +244,7 @@ function buildMenu(): void {
         {
           label: 'Settings…',
           accelerator: 'CmdOrCtrl+,',
-          click: () => BrowserWindow.getAllWindows()[0]?.webContents.send('ui:open-settings'),
+          click: () => { const w = BrowserWindow.getAllWindows()[0]; if (w) notify(w.webContents, 'ui:open-settings'); },
         },
         { type: 'separator' },
         { label: 'Check for Updates…', click: () => void runUpdateCheck(true) },
@@ -289,16 +300,25 @@ function registerIpc(): void {
     const id = randomUUID();
     const session = new Session();
     const win = BrowserWindow.fromWebContents(e.sender);
+    // The password is asked for on the live connection (like OpenSSH) instead of connecting, failing, and connecting again.
+    const promptSecret: SecretPrompt = (q) =>
+      new Promise((resolve) => {
+        const reqId = randomUUID();
+        secretWaiters.set(reqId, resolve);
+        e.sender.once('destroyed', () => resolve(null));
+        notify(e.sender, 'ssh:need-secret', { reqId, title: input.title || req.host, ...q });
+      });
     try {
-      await session.connect(req, hostVerifier(win, req.host, req.port), jumpHops(win, input));
+      await session.connect(req, hostVerifier(win, req.host, req.port), jumpHops(win, input), promptSecret);
     } catch (err) {
       throw classifyConnectError(err, req);
     }
     sessions.set(id, session);
+    e.sender.once('destroyed', () => session.close()); // a closed window ends its sessions
     pendingStartup.set(id, startupFor(input));
     session.onDisconnect(() => {
       pendingStartup.delete(id);
-      if (sessions.delete(id)) e.sender.send('ssh:closed', id);
+      if (sessions.delete(id)) notify(e.sender, 'ssh:closed', id);
     });
     return { id, home: await session.realpath('.') };
   });
@@ -307,9 +327,9 @@ function registerIpc(): void {
     const opened = session.openShell(
       cols,
       rows,
-      (shellId, d) => e.sender.send('ssh:data', id, shellId, d),
+      (shellId, d) => notify(e.sender, 'ssh:data', id, shellId, d),
       (shellId) => {
-        e.sender.send('ssh:shell-closed', id, shellId);
+        notify(e.sender, 'ssh:shell-closed', id, shellId);
         // Typing `exit` in the last shell ends the session, as before split panes existed.
         if (session.shellCount() === 0) session.close();
       },
@@ -347,7 +367,7 @@ function registerIpc(): void {
       const now = Date.now();
       if (now - last < 100 && p.done < p.total) return;
       last = now;
-      e.sender.send('xfer:progress', id, p);
+      notify(e.sender, 'xfer:progress', id, p);
     };
   };
   const overwriteAsker = (win: BrowserWindow | null) => async (name: string) => {
@@ -420,11 +440,16 @@ function registerIpc(): void {
   });
   ipcMain.handle('keys:inspect', (_e, path: string) => inspectKeyFile(String(path ?? '')));
 
+  ipcMain.on('ssh:secret-reply', (_e, reqId: string, value: string | null) => {
+    secretWaiters.get(reqId)?.(typeof value === 'string' ? value : null);
+    secretWaiters.delete(reqId);
+  });
+
   ipcMain.handle('settings:get', () => ({ ...getSettings(), defaults: { terminal: DEFAULT_TERMINAL, connection: DEFAULT_CONNECTION } }));
   ipcMain.handle('settings:set', (_e, patch: { terminal?: unknown; connection?: unknown }) => {
     // The renderer may change appearance and connection defaults; update-check fields stay under the menu's control.
     const next = saveSettings({ terminal: patch?.terminal, connection: patch?.connection });
-    for (const w of BrowserWindow.getAllWindows()) w.webContents.send('settings:changed', next);
+    for (const w of BrowserWindow.getAllWindows()) notify(w.webContents, 'settings:changed', next);
     return next;
   });
 
