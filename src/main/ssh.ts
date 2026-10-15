@@ -5,6 +5,7 @@ import { posix, join as pathJoin, basename } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { Duplex } from 'node:stream';
 import { Forwards } from './forwards';
+import { DEFAULT_CONNECTION } from './prefs';
 
 /** The private key is encrypted and needs a passphrase ('required'), or the one given did not decrypt it ('wrong'). */
 export class KeyPassphraseError extends Error {
@@ -31,6 +32,10 @@ export interface ConnectRequest {
   password?: string;
   privateKeyPath?: string;
   passphrase?: string;
+  /** Seconds between keep-alive probes (0 = off). */
+  keepAliveSec?: number;
+  compression?: boolean;
+  connectTimeoutSec?: number;
 }
 
 export interface RemoteEntry {
@@ -100,7 +105,10 @@ function connectClient(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     client.once('ready', () => resolve());
-    client.once('error', reject);
+    // Stay subscribed for the life of the client: ssh2 may report more than one error (for example a keep-alive timeout
+    // followed by "connection lost"), and an error event nobody listens to would crash the app. Rejecting twice is harmless;
+    // a dropped connection is reported through the 'close' event.
+    client.on('error', reject);
     client.connect({
       host: req.host,
       port: req.port,
@@ -109,7 +117,11 @@ function connectClient(
       privateKey: req.privateKeyPath ? loadPrivateKey(req.privateKeyPath, req.passphrase) : undefined,
       passphrase: req.passphrase,
       sock,
-      readyTimeout: 20000,
+      readyTimeout: (req.connectTimeoutSec ?? DEFAULT_CONNECTION.connectTimeoutSec) * 1000,
+      // A dead link is noticed after about three missed probes instead of hanging; 0 turns this off.
+      keepaliveInterval: (req.keepAliveSec ?? DEFAULT_CONNECTION.keepAliveSec) * 1000,
+      keepaliveCountMax: 3,
+      algorithms: req.compression ? { compress: ['zlib@openssh.com', 'zlib', 'none'] } : undefined,
       hostHash: 'sha256',
       // ssh2 uses the callback when the function returns undefined.
       hostVerifier: ((hash: string, cb: (ok: boolean) => void): undefined => {
@@ -173,6 +185,7 @@ export class Session {
         if (err) return reject(err);
         const id = randomUUID();
         this.shells.set(id, stream);
+        stream.on('error', () => {}); // the channel's 'close' event reports the end
         stream.on('data', (d: Buffer) => onData(id, d.toString('utf8')));
         stream.on('close', () => {
           this.shells.delete(id);
