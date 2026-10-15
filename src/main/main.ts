@@ -1,9 +1,9 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, IpcMainInvokeEvent } from 'electron';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { Session, ConnectRequest } from './ssh';
+import { Session, ConnectRequest, Progress } from './ssh';
 import { parseSshConfig } from './sshconfig';
 import {
   Profile,
@@ -132,6 +132,57 @@ function registerIpc(): void {
   ipcMain.handle('sftp:list', (_e, id: string, path: string) => get(id).list(path));
   ipcMain.handle('sftp:read', (_e, id: string, path: string) => get(id).readFile(path));
   ipcMain.handle('sftp:write', (_e, id: string, path: string, content: string) => get(id).writeFile(path, content));
+
+  ipcMain.handle('sftp:mkdir', (_e, id: string, path: string) => get(id).mkdir(path));
+  ipcMain.handle('sftp:rename', (_e, id: string, from: string, to: string) => get(id).rename(from, to));
+  ipcMain.handle('sftp:chmod', (_e, id: string, path: string, mode: number) => get(id).chmod(path, mode));
+  ipcMain.handle('sftp:remove', (_e, id: string, path: string) => get(id).remove(path));
+
+  const progressSender = (e: IpcMainInvokeEvent, id: string) => {
+    let last = 0;
+    return (p: Progress) => {
+      const now = Date.now();
+      if (now - last < 100 && p.done < p.total) return;
+      last = now;
+      e.sender.send('xfer:progress', id, p);
+    };
+  };
+  const overwriteAsker = (win: BrowserWindow | null) => async (name: string) => {
+    const opts = {
+      type: 'question' as const,
+      message: `"${name}" already exists. Replace it?`,
+      buttons: ['Replace', 'Skip'],
+      defaultId: 1,
+      cancelId: 1,
+    };
+    const r = win ? await dialog.showMessageBox(win, opts) : await dialog.showMessageBox(opts);
+    return r.response === 0;
+  };
+
+  // locals is omitted when the user picks files through the dialog; drag and drop passes paths.
+  ipcMain.handle('xfer:upload', async (e, id: string, remoteDir: string, locals?: string[]) => {
+    const win = BrowserWindow.fromWebContents(e.sender);
+    let paths = locals;
+    if (!paths) {
+      const opts = { properties: ['openFile', 'openDirectory', 'multiSelections'] as ('openFile' | 'openDirectory' | 'multiSelections')[] };
+      const pick = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
+      if (pick.canceled) return null;
+      paths = pick.filePaths;
+    }
+    return get(id).upload(paths, remoteDir, progressSender(e, id), overwriteAsker(win));
+  });
+  ipcMain.handle('xfer:download', async (e, id: string, remotes: string[]) => {
+    const win = BrowserWindow.fromWebContents(e.sender);
+    const opts = {
+      title: 'Choose where to save',
+      properties: ['openDirectory', 'createDirectory'] as ('openDirectory' | 'createDirectory')[],
+      defaultPath: app.getPath('downloads'),
+    };
+    const pick = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
+    if (pick.canceled || !pick.filePaths[0]) return null;
+    return get(id).download(remotes, pick.filePaths[0], progressSender(e, id), overwriteAsker(win));
+  });
+
   ipcMain.handle('ssh:disconnect', (_e, id: string) => {
     sessions.get(id)?.close();
     sessions.delete(id);

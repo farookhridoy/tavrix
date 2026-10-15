@@ -1,6 +1,6 @@
 {
   "name": "tavrix",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Tavrix: an SSH terminal with a remote file browser and editor for macOS",
   "main": "dist/main/main.js",
   "private": true,
@@ -9,7 +9,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "npm run build && electron .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node --test dist/main/sshconfig.test.js dist/main/ssh.test.js"
+    "test": "npm run build && node --test dist/main/sshconfig.test.js dist/main/ssh.test.js dist/main/sftp.integration.test.js"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
@@ -20,6 +20,7 @@
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
+    "monaco-editor": "0.52.2",
     "ssh2": "^1.17.0"
   }
 }

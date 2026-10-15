@@ -44,3 +44,18 @@ dialog form { display: flex; flex-direction: column; gap: 8px; }
 dialog h3 { margin: 0 0 4px; }
 dialog label { color: #aaa; font-size: 12px; }
 dialog .row { display: flex; justify-content: flex-end; gap: 8px; }
+
+.ftools { display: flex; gap: 4px; padding: 4px 6px; background: #252525; border-bottom: 1px solid #333; }
+.files li { display: flex; justify-content: space-between; gap: 8px; }
+.files li.sel { background: #094771; }
+.files li small { color: #888; }
+.files.dragover, aside.dragover { outline: 2px dashed #3794ff; outline-offset: -3px; }
+.status { display: flex; gap: 8px; align-items: center; }
+.status .msg { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status progress { width: 160px; }
+.editarea { display: none; }
+.monaco { flex: 1; min-height: 0; }
+#menu { position: fixed; z-index: 10; background: #2d2d2d; border: 1px solid #555; border-radius: 6px; padding: 4px 0; min-width: 160px; box-shadow: 0 4px 16px rgba(0,0,0,.5); }
+#menu div { padding: 5px 14px; cursor: pointer; }
+#menu div:hover { background: #094771; }
+#menu hr { border: 0; border-top: 1px solid #444; margin: 4px 0; }
