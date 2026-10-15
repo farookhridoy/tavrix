@@ -18,15 +18,17 @@ latest GitHub release         ┘      scripts/build-site.mjs        (generated)
 
 ## One-time Hostinger setup
 
-In hPanel, open the website `tavrix.farookhridoy.com` → **Advanced → Git** (the labels may differ slightly between plans):
+In hPanel open the website `tavrix.farookhridoy.com` → **Advanced → GIT** (the page that says "Deploy from Git repository"):
 
-1. **Repository:** `https://github.com/farookhridoy/tavrix.git` (the repository is public, so no key is needed).
-2. **Branch:** `site`.
-3. **Install path:** leave it empty to deploy into the subdomain's `public_html`. If Hostinger says the folder is not empty, delete the default placeholder file (`default.php`) in the File Manager first, then deploy.
-4. Press **Deploy**. The site appears at the address above.
-5. For **auto-deploy**, copy the webhook URL Hostinger shows, then in GitHub open the repository → **Settings → Webhooks → Add webhook**: paste the URL as the *Payload URL*, content type `application/json`, and choose *Just the push event*. From then on every update of the `site` branch is deployed within seconds.
+1. Click **Continue with GitHub** and sign in. When GitHub asks which repositories Hostinger may access, choose **Only select repositories → `farookhridoy/tavrix`**. Hostinger needs to read the repository, not write to it.
+2. Select the repository **`farookhridoy/tavrix`** and the branch **`site`** (not `main`).
+3. **Install path:** leave it as the website's root (`public_html`). If Hostinger says the folder is not empty, delete the default placeholder file (`default.php`) in **Files → File Manager** first, then deploy.
+4. Turn on **auto-deployment** if it is offered (some plans show it as an *Auto deploy* switch or a webhook). Then every update of the `site` branch is deployed without any click.
+5. Press **Deploy** and open https://tavrix.farookhridoy.com.
 
-The first request after a deploy should show the new version; the page itself is never cached (`Cache-Control: no-cache`), and CSS/JS are cached for an hour.
+If your plan instead shows a plain repository-URL form: use `https://github.com/farookhridoy/tavrix.git`, branch `site`, and, for auto-deploy, add the webhook URL Hostinger shows under the repository's **Settings → Webhooks** (content type `application/json`, *Just the push event*).
+
+The page itself is never cached (`Cache-Control: no-cache`), so a deploy shows up right away; CSS and JavaScript are cached for an hour, images for a day.
 
 ## Changing the website
 
