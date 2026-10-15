@@ -93,3 +93,18 @@ export function saveSnippet(s: Snippet): void {
 export function deleteSnippet(id: string): void {
   save('snippets.json', listSnippets().filter((x) => x.id !== id));
 }
+
+export interface Settings {
+  /** Look for a newer release on GitHub at startup and every 12 hours. */
+  updateCheck: boolean;
+  /** A release version the user chose not to be told about again. */
+  skippedVersion?: string;
+}
+
+export function getSettings(): Settings {
+  return { updateCheck: true, ...load<Partial<Settings>>('settings.json', {}) };
+}
+
+export function saveSettings(patch: Partial<Settings>): void {
+  save('settings.json', { ...getSettings(), ...patch });
+}

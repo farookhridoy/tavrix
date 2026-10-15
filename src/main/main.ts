@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, IpcMainInvokeEvent } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, shell, Menu, IpcMainInvokeEvent, MenuItemConstructorOptions } from 'electron';
 import { join } from 'node:path';
 import { homedir, userInfo } from 'node:os';
 import { readFileSync } from 'node:fs';
@@ -19,7 +19,10 @@ import {
   saveSnippet,
   deleteSnippet,
   Snippet,
+  getSettings,
+  saveSettings,
 } from './store';
+import { checkForUpdate, openTarget, FEED_URL, UpdateInfo } from './updates';
 
 const sessions = new Map<string, Session>();
 
@@ -127,6 +130,77 @@ function hostVerifier(win: BrowserWindow | null, host: string, port: number) {
   };
 }
 
+/* ---------- updates ---------- */
+
+let pendingUpdate: UpdateInfo | null = null;
+const HOUR = 3600_000;
+
+/** Test hooks apply only to unpackaged runs, so a shipped app can only ever ask this project's GitHub feed. */
+const feedUrl = (): string => (!app.isPackaged && process.env.TAVRIX_UPDATE_URL) || FEED_URL;
+
+function announceUpdate(): void {
+  if (!pendingUpdate) return;
+  for (const w of BrowserWindow.getAllWindows()) w.webContents.send('update:available', pendingUpdate);
+}
+
+async function runUpdateCheck(manual: boolean): Promise<void> {
+  if (!manual && !getSettings().updateCheck) return;
+  const r = await checkForUpdate(app.getVersion(), fetch as never, feedUrl());
+  if (r.kind === 'available') {
+    if (!manual && getSettings().skippedVersion === r.info.latest) return;
+    pendingUpdate = r.info;
+    announceUpdate();
+    if (manual) BrowserWindow.getAllWindows()[0]?.focus();
+    return;
+  }
+  if (!manual) return; // background checks stay silent unless there is something to say
+  const win = BrowserWindow.getAllWindows()[0];
+  const opts = {
+    type: r.kind === 'error' ? ('warning' as const) : ('info' as const),
+    message: r.kind === 'current' ? `Tavrix ${r.current} is up to date` : r.kind === 'none' ? 'No releases have been published yet' : 'Could not check for updates',
+    detail: r.kind === 'error' ? r.message : r.kind === 'current' ? `The latest release is ${r.latest}.` : undefined,
+    buttons: ['OK'],
+  };
+  if (win) await dialog.showMessageBox(win, opts);
+  else await dialog.showMessageBox(opts);
+}
+
+function scheduleUpdateChecks(): void {
+  const first = Number(!app.isPackaged && process.env.TAVRIX_UPDATE_DELAY_MS) || 10_000;
+  setTimeout(() => void runUpdateCheck(false), first);
+  setInterval(() => void runUpdateCheck(false), 12 * HOUR).unref();
+}
+
+function buildMenu(): void {
+  const template: MenuItemConstructorOptions[] = [
+    {
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { label: 'Check for Updates…', click: () => void runUpdateCheck(true) },
+        {
+          label: 'Check for Updates Automatically',
+          type: 'checkbox',
+          checked: getSettings().updateCheck,
+          click: (item) => saveSettings({ updateCheck: item.checked }),
+        },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    },
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1360,
@@ -140,6 +214,7 @@ function createWindow(): BrowserWindow {
     },
   });
   win.loadFile(join(__dirname, '../../src/renderer/index.html'));
+  win.webContents.on('did-finish-load', announceUpdate); // a window opened after the check still gets the banner
   return win;
 }
 
@@ -252,6 +327,16 @@ function registerIpc(): void {
     sessions.delete(id);
   });
 
+  // The renderer only says which button was pressed; the URL always comes from what the main process verified.
+  ipcMain.handle('update:open', async (_e, kind: 'download' | 'notes') => {
+    const url = openTarget(pendingUpdate, kind === 'notes' ? 'notes' : 'download');
+    if (url) await shell.openExternal(url);
+  });
+  ipcMain.handle('update:skip', () => {
+    if (pendingUpdate) saveSettings({ skippedVersion: pendingUpdate.latest });
+    pendingUpdate = null;
+  });
+
   ipcMain.handle('fwd:list', (_e, id: string) => get(id).forwards.list());
   ipcMain.handle('fwd:start', async (e, id: string, raw: ForwardSpec) => {
     const spec: ForwardSpec = {
@@ -351,7 +436,9 @@ function registerIpc(): void {
 
 app.whenReady().then(() => {
   registerIpc();
+  buildMenu();
   createWindow();
+  scheduleUpdateChecks();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });

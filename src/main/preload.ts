@@ -11,6 +11,12 @@ contextBridge.exposeInMainWorld('api', {
     start: (id: string, spec: unknown) => ipcRenderer.invoke('fwd:start', id, spec),
     stop: (id: string, fwdId: string) => ipcRenderer.invoke('fwd:stop', id, fwdId),
   },
+  update: {
+    open: (kind: 'download' | 'notes') => ipcRenderer.invoke('update:open', kind),
+    skip: () => ipcRenderer.invoke('update:skip'),
+    onAvailable: (cb: (info: { current: string; latest: string; notes: string }) => void) =>
+      ipcRenderer.on('update:available', (_e, info) => cb(info)),
+  },
   snippets: {
     list: () => ipcRenderer.invoke('snippets:list'),
     save: (s: unknown) => ipcRenderer.invoke('snippets:save', s),

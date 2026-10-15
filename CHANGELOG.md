@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0
+- Update notice: Tavrix checks this project's GitHub Releases ~10 seconds after launch and every 12 hours, and shows a bar when a newer version exists, with **Download**, **Release notes**, **Later** and **Skip this version**. It never installs anything by itself; Download opens the installer link in your browser.
+- Tavrix menu: **Check for Updates…** (also reports "up to date" or errors) and **Check for Updates Automatically** (on by default; turn it off to stop all background requests).
+- Only `https://github.com/farookhridoy/tavrix/...` links are ever opened, whatever the feed contains; odd version tags and look-alike hosts are ignored.
+- The repository is now public (MIT).
+
 ## 1.1.0
 - New file button and right-click entry: creates an empty `0644` file, opens it, and refuses to overwrite an existing one.
 - Auto-save (checkbox in the editor bar, off by default, remembered): saves 1.5 s after you stop typing. If the file changed on the server it pauses and tells you rather than overwriting.
