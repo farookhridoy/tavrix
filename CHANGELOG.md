@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.4.2
+- A visible **⚙ Settings** button in the sidebar header (next to + and Import). Settings was only reachable from the menu bar (Tavrix > Settings…, Cmd+,), which was hard to find. The menu item and shortcut still work and are now covered by a test that drives the real menu.
+
 ## 1.4.1
 - Fix: the app's code signature was inconsistent (macOS reported "code has no resources but signature indicates they must be present"), a side effect of trimming languages after Electron sealed the app (since 1.2.1). On the Mac that built it the app still opened, but a downloaded copy could be shown as "damaged" instead of the usual "unidentified developer". Unsigned builds are now ad-hoc signed after packaging, so the signature verifies (`codesign --verify --deep --strict`) and macOS gives the normal prompt that right-click > Open can approve.
 - Builds that use a real Developer ID are unchanged (hardened runtime stays on for notarization).
