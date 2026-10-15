@@ -22,7 +22,7 @@ export class Session {
   private shell?: ClientChannel;
   private sftpHandle?: SFTPWrapper;
 
-  connect(req: ConnectRequest): Promise<void> {
+  connect(req: ConnectRequest, verifyHost: (sha256Hex: string) => Promise<boolean>): Promise<void> {
     return new Promise((resolve, reject) => {
       this.client.once('ready', () => resolve());
       this.client.once('error', reject);
@@ -34,6 +34,11 @@ export class Session {
         privateKey: req.privateKeyPath ? readFileSync(req.privateKeyPath) : undefined,
         passphrase: req.passphrase,
         readyTimeout: 20000,
+        hostHash: 'sha256',
+        // ssh2 uses the callback when the function returns undefined.
+        hostVerifier: ((hash: string, cb: (ok: boolean) => void): undefined => {
+          verifyHost(hash).then(cb, () => cb(false));
+        }) as unknown as (hash: string) => boolean,
       });
     });
   }
