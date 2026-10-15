@@ -16,11 +16,12 @@ Tavrix is a Mac app that puts an **SSH terminal**, a **file manager** and a **co
 
 ### The first launch warning
 
-Tavrix is not signed by a paid Apple Developer account, so macOS shows **"Apple could not verify "Tavrix" is free of malware…"** the first time you open a downloaded copy.
+> **Do not skip this.** Tavrix is not signed by a paid Apple Developer account, so the first time you open a downloaded copy macOS shows **"Apple could not verify "Tavrix" is free of malware…"**. That is expected, and you only need to do this once.
 
-1. Click **Done**. *Do not click Move to Trash.*
+1. Open Tavrix from Applications. When the warning appears, click **Done**. *Do not click Move to Trash.*
 2. Open **System Settings → Privacy & Security** and scroll down to **Security**.
 3. Click **Open Anyway** next to Tavrix and enter your password.
+4. Open Tavrix again and click **Open**.
 
 Prefer Terminal? This does the same thing:
 
@@ -28,7 +29,13 @@ Prefer Terminal? This does the same thing:
 xattr -dr com.apple.quarantine /Applications/Tavrix.app
 ```
 
-You only need to do this once per downloaded copy. To check a download, compare its SHA-256 with the one in the release notes: `shasum -a 256 Tavrix-….dmg`.
+### Verify your download
+
+Compare the SHA-256 in the release notes with your file's. The two values must match exactly:
+
+```
+shasum -a 256 ~/Downloads/Tavrix-*.dmg
+```
 
 ### Updates
 

@@ -24,6 +24,9 @@
   <img src="docs/images/main-window.jpg" alt="The Tavrix window: saved sessions on the left, a file panel, a terminal and an editor with tabs" width="900">
 </p>
 
+> [!IMPORTANT]
+> **The first time you open Tavrix, macOS shows a warning. That is expected.** Tavrix is not signed by a paid Apple Developer account. Click **Done** (not *Move to Trash*), then open **System Settings → Privacy & Security → Open Anyway**. [Step-by-step instructions](#how-to-install-and-open-tavrix).
+
 Tavrix connects to your servers over SSH and gives you everything you reach for in one place: a **terminal**, a **file browser** you can drag files into, and an **editor with tabs** that saves straight back to the server. No separate SFTP client, no copy-pasting paths.
 
 ## Features
@@ -49,17 +52,35 @@ Get the installer for your Mac from the **[Releases page](https://github.com/far
 | Apple Silicon (M1 and later) | `Tavrix-…-arm64.dmg` | about 85 MB |
 | Intel | `Tavrix-…-x64.dmg` | about 96 MB |
 
-Not sure which one? Apple menu → **About This Mac** shows the chip. Open the `.dmg` and drag **Tavrix** into **Applications**.
+Not sure which one? Apple menu → **About This Mac** shows the chip.
 
-### The first-launch warning
+### How to install and open Tavrix
 
-Tavrix is not signed by a paid Apple Developer account, so macOS says **"Apple could not verify "Tavrix" is free of malware…"** the first time you open a downloaded copy.
+> [!IMPORTANT]
+> Do not skip steps 2 and 3. Tavrix is not signed by a paid Apple Developer account, so macOS says **"Apple could not verify "Tavrix" is free of malware…"** the first time you open a downloaded copy. Nothing is wrong with your download, and you only need to do this once.
 
-1. Click **Done**. *Do not click Move to Trash.*
-2. Open **System Settings → Privacy & Security** and scroll to **Security**.
-3. Click **Open Anyway** next to Tavrix and enter your password.
+1. **Install.** Open the `.dmg` and drag **Tavrix** into **Applications**.
+2. **Open it once.** Open Tavrix from Applications. When macOS shows the warning, click **Done**. *Do not click Move to Trash.*
+3. **Allow it.** Open **System Settings → Privacy & Security**, scroll down to **Security**, click **Open Anyway** next to Tavrix and enter your password.
+4. **Use it.** Open Tavrix again and click **Open**. Click **+** to add your first server. A short tour starts by itself.
 
-Or, in Terminal: `xattr -dr com.apple.quarantine /Applications/Tavrix.app`. You only need to do this once per downloaded copy. Each release lists a SHA-256 checksum so you can verify your download with `shasum -a 256 <file>`.
+**Prefer Terminal?** Run this once, then open Tavrix normally:
+
+```
+xattr -dr com.apple.quarantine /Applications/Tavrix.app
+```
+
+Seeing *"Tavrix is damaged"* or *"Not Opened"* instead? It is the same thing and the same fix.
+
+### Verify your download
+
+Each release lists a SHA-256 checksum for both installers. Compare it with your file's:
+
+```
+shasum -a 256 ~/Downloads/Tavrix-*.dmg
+```
+
+The two values must match exactly. The source code is open, so you can also [build it yourself](#build-it-yourself).
 
 ### Updates
 
@@ -193,7 +214,7 @@ The **Manual** button (top right, or **F1**) opens the full documentation inside
 
 | Problem | What to do |
 |---|---|
-| macOS says Tavrix is "Not Opened" or "damaged" | Click **Done**, then **System Settings → Privacy & Security → Open Anyway**. See [the first-launch warning](#the-first-launch-warning). |
+| macOS says Tavrix is "Not Opened" or "damaged" | Click **Done**, then **System Settings → Privacy & Security → Open Anyway**. See [the install steps](#how-to-install-and-open-tavrix). |
 | "Authentication failed" | Check the username and password. If the server only accepts keys, choose your private key (not the `.pub` file). |
 | "Host key has CHANGED" | The server presented a different key than the one you trusted. Do not connect unless you reinstalled it; then remove its entry from `known_hosts.json`. |
 | The connection drops when idle | Lower **Keep-alive** on the session's Advanced tab. |
