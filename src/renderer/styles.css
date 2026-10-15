@@ -1,12 +1,13 @@
 * { box-sizing: border-box; }
+html, body { overflow: hidden; }
 body { margin: 0; height: 100vh; display: flex; flex-direction: column; font: 13px -apple-system, sans-serif; background: #1e1e1e; color: #ddd; }
 button, input { font: inherit; }
 button { background: #333; color: #ddd; border: 1px solid #484848; border-radius: 4px; padding: 3px 8px; cursor: pointer; }
 button:hover { background: #3d3d3d; }
 input[type=text], input:not([type]), input[type=password], input[type=number] { background: #1e1e1e; color: #ddd; border: 1px solid #444; padding: 5px 7px; border-radius: 4px; }
-#titlebar { height: 28px; -webkit-app-region: drag; background: #262626; flex: none; }
+#titlebar { height: 28px; -webkit-app-region: drag; background: #262626; flex: none; display: flex; align-items: center; padding-left: 84px; }
 #app { flex: 1; display: flex; min-height: 0; }
-#sessions { width: 220px; border-right: 1px solid #333; display: flex; flex-direction: column; background: #232323; }
+#sessions { width: var(--sessions-w, 220px); flex: none; border-right: 0; display: flex; flex-direction: column; background: #232323; }
 #sessions .head { display: flex; justify-content: space-between; align-items: center; padding: 8px; }
 #sessions .head span { display: flex; gap: 4px; }
 #sessionList { list-style: none; margin: 0; padding: 0; overflow: auto; flex: 1; }
@@ -25,7 +26,7 @@ input[type=text], input:not([type]), input[type=password], input[type=number] { 
 #panes { flex: 1; position: relative; min-height: 0; }
 .pane { position: absolute; inset: 0; display: none; }
 .pane.active { display: flex; }
-.pane aside { width: 260px; border-right: 1px solid #333; display: flex; flex-direction: column; }
+.pane aside { width: var(--files-w, 260px); flex: none; border-right: 0; display: flex; flex-direction: column; }
 .cwd { padding: 6px 8px; background: #252525; word-break: break-all; }
 .files { list-style: none; margin: 0; padding: 0; overflow: auto; flex: 1; }
 .files li { padding: 3px 10px; cursor: pointer; white-space: nowrap; }
@@ -35,8 +36,6 @@ input[type=text], input:not([type]), input[type=password], input[type=number] { 
 .terms.row { flex-direction: row; }
 .terms.col { flex-direction: column; }
 .tpane { flex: 1; min-width: 0; min-height: 0; padding: 4px; }
-.terms .tpane + .tpane { border-left: 1px solid #333; }
-.terms.col .tpane + .tpane { border-left: 0; border-top: 1px solid #333; }
 .editor { flex: 1; display: flex; flex-direction: column; border-top: 1px solid #333; }
 .editor[hidden] { display: none; }
 .editbar { display: flex; gap: 8px; align-items: center; padding: 4px 8px; background: #252525; }
@@ -124,3 +123,96 @@ dialog code { background: #1e1e1e; padding: 0 4px; border-radius: 3px; }
 #f-keyhint.good { color: #4ec9b0; }
 #f-keyhint.warn { color: #e5c07b; }
 #f-keyhint.bad { color: #f48771; }
+
+#layoutTools { display: flex; gap: 4px; -webkit-app-region: no-drag; }
+#layoutTools button { font-size: 11px; padding: 1px 8px; background: transparent; border-color: #555; color: #999; }
+#layoutTools button.on { background: #3a3a3a; color: #ddd; border-color: #666; }
+body.hide-sessions #sessions { display: none; }
+body.hide-files .pane aside { display: none; }
+/* full-screen editor: only the editor (and the status line) remain */
+body.editor-max #sessions, body.editor-max #tabbar, body.editor-max #update, body.editor-max #layoutTools { display: none; }
+body.editor-max .pane.active aside, body.editor-max .pane.active .terms { display: none; }
+body.editor-max .pane.active .editor { border-top: 0; }
+.doctabs { display: flex; overflow-x: auto; background: #252526; border-bottom: 1px solid #333; flex: none; }
+.doctabs[hidden] { display: none; }
+.dtab { display: flex; align-items: center; gap: 6px; padding: 5px 10px; cursor: pointer; border-right: 1px solid #333; white-space: nowrap; color: #999; font-size: 12px; }
+.dtab:hover { background: #2d2d2d; }
+.dtab.on { background: #1e1e1e; color: #fff; box-shadow: inset 0 2px 0 #3794ff; }
+.dtab .ddot { color: #e5c07b; font-size: 11px; min-width: 6px; }
+.dtab .dclose { color: #777; padding: 0 3px; border-radius: 3px; }
+.dtab .dclose:hover { background: #444; color: #fff; }
+
+/* ---------- resizable panels ---------- */
+.splitter { flex: none; position: relative; background: #333; touch-action: none; outline: none; z-index: 2; }
+.splitter.v { width: 4px; cursor: col-resize; }
+.splitter.h { height: 4px; cursor: row-resize; }
+.splitter::after { content: ''; position: absolute; }                 /* a wider invisible grab area */
+.splitter.v::after { inset: 0 -4px; }
+.splitter.h::after { inset: -4px 0; }
+.splitter:hover, .splitter:focus-visible, .splitter.drag { background: #3794ff; }
+body.resizing { user-select: none; -webkit-user-select: none; }
+body.resizing.rs-x, body.resizing.rs-x * { cursor: col-resize !important; }
+body.resizing.rs-y, body.resizing.rs-y * { cursor: row-resize !important; }
+body.hide-sessions #sessionsSplit, body.hide-files .fsplit { display: none; }
+.work:has(> .editor[hidden]) > .hsplit { display: none; }
+body.editor-max .splitter { display: none; }
+#layoutTools button.icon { padding: 2px 6px; display: inline-flex; align-items: center; }
+#layoutTools button.icon svg .fill { opacity: 0; }
+#layoutTools button.icon.on svg .fill { opacity: .55; }
+
+/* with no editor open the terminals take everything, whatever share the editor had */
+.work:has(> .editor[hidden]) > .terms { flex-grow: 1 !important; }
+
+/* Flex items default to "never smaller than your content"; Monaco sets a pixel height on itself, so without this the editor could only grow. */
+.work, .editor, .editor .monaco { min-height: 0; }
+.work { min-width: 0; }
+
+/* ---------- manual and quick tour ---------- */
+#helpTools { margin-left: auto; margin-right: 10px; -webkit-app-region: no-drag; }
+#helpTools button { font-size: 11px; padding: 1px 9px; background: transparent; border-color: #555; color: #bbb; display: inline-flex; align-items: center; gap: 5px; }
+#helpTools button:hover { background: #3a3a3a; color: #fff; }
+#manual { width: min(1120px, 94vw); height: 88vh; padding: 0; overflow: hidden; }
+#manual[open] { display: flex; flex-direction: column; }
+#manual .mhead { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #252526; border-bottom: 1px solid #3a3a3a; flex: none; }
+#manual .mbtns { display: flex; gap: 6px; }
+#manualFrame { flex: 1; border: 0; width: 100%; background: #1e1e1e; }
+#tour { position: fixed; inset: 0; z-index: 1000; }
+#tour[hidden] { display: none; }
+#tourHole { position: absolute; border-radius: 8px; box-shadow: 0 0 0 9999px rgba(0, 0, 0, .64); outline: 2px solid #3794ff; transition: left .2s, top .2s, width .2s, height .2s; pointer-events: none; }
+#tour.centered { background: rgba(0, 0, 0, .64); }
+#tour.centered #tourHole { display: none; }
+#tourCard { position: absolute; width: 340px; max-width: calc(100vw - 24px); background: #2b2b2e; color: #e6e6e6; border: 1px solid #4a4a50; border-radius: 10px; padding: 16px 18px 14px; box-shadow: 0 10px 40px rgba(0, 0, 0, .6); }
+#tourCard h3 { margin: 0 24px 6px 0; font-size: 15px; }
+#tourBody { line-height: 1.5; color: #c8c8cc; font-size: 13px; }
+#tourBody ul { margin: 6px 0 0; padding-left: 18px; }
+#tourBody li { margin: 3px 0; }
+#tourBody kbd, .kbd { background: #1e1e1e; border: 1px solid #555; border-radius: 4px; padding: 0 5px; font-size: 11px; }
+#tourClose { position: absolute; top: 8px; right: 8px; border: 0; background: transparent; color: #999; padding: 2px 7px; font-size: 13px; }
+#tourClose:hover { color: #fff; background: #444; }
+.tourfoot { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; }
+#tourDots { display: flex; gap: 5px; }
+#tourDots i { width: 6px; height: 6px; border-radius: 50%; background: #555; }
+#tourDots i.on { background: #3794ff; }
+.tourbtns { display: flex; gap: 6px; }
+.tourbtns .primary { background: #0e639c; border-color: #1177bb; color: #fff; }
+.tourbtns .primary:hover { background: #1177bb; }
+.tourbtns button:disabled { opacity: .4; cursor: default; }
+@media (prefers-reduced-motion: reduce) { #tourHole { transition: none; } }
+
+.row2 { display: grid; grid-template-columns: 1fr 96px; gap: 8px; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.lab, dialog label { font-size: 12px; color: #aaa; }
+.opt { color: #777; font-weight: normal; }
+#f-keyhint { margin-top: 0; }
+
+/* icon-only buttons (editor bar) */
+.editbar button.icon { padding: 4px 7px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border-color: transparent; color: #bbb; }
+.editbar button.icon:hover { background: #3a3a3a; border-color: #555; color: #fff; }
+.editbar button.icon[hidden] { display: none; }
+.editbar button.icon svg { fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.editbar button.icon svg [fill='currentColor'] { fill: currentColor; stroke: none; }
+.editbar { gap: 2px; }
+.editbar .editpath { margin-right: 8px; }
+
+/* Full-screen editor: the terminals are hidden, so the editor must take all the space whatever share it had beside them. */
+body.editor-max .pane.active .editor { flex-grow: 1 !important; }

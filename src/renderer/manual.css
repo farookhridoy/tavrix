@@ -1,0 +1,27 @@
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 16px; }
+body { margin: 0; display: flex; background: #1e1e1e; color: #d4d4d4; font: 14px/1.6 -apple-system, "Helvetica Neue", sans-serif; }
+nav { position: sticky; top: 0; align-self: flex-start; width: 210px; flex: none; height: 100vh; overflow: auto; padding: 18px 12px; border-right: 1px solid #333; background: #232323; }
+nav strong { display: block; margin: 0 8px 8px; color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+nav ul { list-style: none; margin: 0; padding: 0; }
+nav a { display: block; padding: 4px 8px; border-radius: 5px; color: #bbb; text-decoration: none; font-size: 13px; }
+nav a:hover { background: #333; color: #fff; }
+main { flex: 1; min-width: 0; max-width: 820px; padding: 24px 36px 80px; }
+h1 { margin: 0 0 8px; font-size: 28px; }
+h2 { margin: 38px 0 10px; padding-top: 18px; border-top: 1px solid #333; font-size: 21px; }
+h3 { margin: 26px 0 6px; font-size: 16px; color: #9cdcfe; }
+p, li { color: #d0d0d0; }
+a { color: #4fa8ff; }
+code { background: #2b2b2e; padding: 1px 5px; border-radius: 4px; font: 12.5px Menlo, monospace; }
+pre { background: #151515; padding: 12px 14px; border-radius: 8px; overflow: auto; border: 1px solid #333; }
+pre code { background: none; padding: 0; }
+kbd { background: #2b2b2e; border: 1px solid #555; border-bottom-width: 2px; border-radius: 4px; padding: 0 6px; font: 12px Menlo, monospace; white-space: nowrap; }
+table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 13px; }
+th, td { border: 1px solid #3a3a3a; padding: 6px 10px; text-align: left; vertical-align: top; }
+th { background: #2a2a2d; }
+figure { margin: 14px 0 20px; }
+figure img { max-width: 100%; border: 1px solid #3a3a3a; border-radius: 8px; box-shadow: 0 4px 18px rgba(0, 0, 0, .35); }
+figcaption { margin-top: 6px; color: #888; font-size: 12px; }
+ol li, ul li { margin: 4px 0; }
+@media (max-width: 760px) { nav { display: none; } main { padding: 18px; } }

@@ -14,6 +14,13 @@ contextBridge.exposeInMainWorld('api', {
   onNeedSecret: (cb: (q: { reqId: string; title: string; label: string; previousFailed: boolean; secret: boolean }) => void) =>
     ipcRenderer.on('ssh:need-secret', (_e, q) => cb(q)),
   replySecret: (reqId: string, value: string | null) => ipcRenderer.send('ssh:secret-reply', reqId, value),
+  onToggle: (cb: (what: 'sessions' | 'files' | 'editor-full') => void) => ipcRenderer.on('ui:toggle', (_e, what) => cb(what)),
+  help: { open: (key: 'manual' | 'readme' | 'issues' | 'releases') => ipcRenderer.invoke('help:open', key) },
+  tour: { done: () => ipcRenderer.invoke('tour:done') },
+  onHelp: (cb: (what: 'tour' | 'manual') => void) => {
+    ipcRenderer.on('ui:tour', () => cb('tour'));
+    ipcRenderer.on('ui:manual', () => cb('manual'));
+  },
   keys: {
     pick: () => ipcRenderer.invoke('keys:pick'),
     inspect: (path: string) => ipcRenderer.invoke('keys:inspect', path),
