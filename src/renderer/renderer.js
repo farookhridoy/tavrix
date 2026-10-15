@@ -83,6 +83,98 @@ function loadMonaco() {
   return monacoPromise;
 }
 
+/* ---------- terminal settings ---------- */
+
+const ANSI = (c) => ({ black: c[0], red: c[1], green: c[2], yellow: c[3], blue: c[4], magenta: c[5], cyan: c[6], white: c[7], brightBlack: c[8], brightRed: c[9], brightGreen: c[10], brightYellow: c[11], brightBlue: c[12], brightMagenta: c[13], brightCyan: c[14], brightWhite: c[15] });
+const TERM_THEMES = {
+  'tavrix-dark': { label: 'Tavrix Dark', background: '#1e1e1e', foreground: '#d4d4d4', cursor: '#aeafad', selectionBackground: '#264f78', ...ANSI(['#000000', '#cd3131', '#0dbc79', '#e5e510', '#2472c8', '#bc3fbc', '#11a8cd', '#e5e5e5', '#666666', '#f14c4c', '#23d18b', '#f5f543', '#3b8eea', '#d670d6', '#29b8db', '#ffffff']) },
+  light: { label: 'Light', background: '#ffffff', foreground: '#1e1e1e', cursor: '#1e1e1e', selectionBackground: '#add6ff', ...ANSI(['#000000', '#cd3131', '#00a000', '#949800', '#0451a5', '#bc05bc', '#0598bc', '#555555', '#666666', '#cd3131', '#14ce14', '#b5ba00', '#0451a5', '#bc05bc', '#0598bc', '#a5a5a5']) },
+  'solarized-dark': { label: 'Solarized Dark', background: '#002b36', foreground: '#839496', cursor: '#93a1a1', selectionBackground: '#073642', ...ANSI(['#073642', '#dc322f', '#859900', '#b58900', '#268bd2', '#d33682', '#2aa198', '#eee8d5', '#586e75', '#cb4b16', '#586e75', '#657b83', '#839496', '#6c71c4', '#93a1a1', '#fdf6e3']) },
+  dracula: { label: 'Dracula', background: '#282a36', foreground: '#f8f8f2', cursor: '#f8f8f2', selectionBackground: '#44475a', ...ANSI(['#21222c', '#ff5555', '#50fa7b', '#f1fa8c', '#bd93f9', '#ff79c6', '#8be9fd', '#f8f8f2', '#6272a4', '#ff6e6e', '#69ff94', '#ffffa5', '#d6acff', '#ff92df', '#a4ffff', '#ffffff']) },
+  monokai: { label: 'Monokai', background: '#272822', foreground: '#f8f8f2', cursor: '#f8f8f0', selectionBackground: '#49483e', ...ANSI(['#272822', '#f92672', '#a6e22e', '#f4bf75', '#66d9ef', '#ae81ff', '#a1efe4', '#f8f8f2', '#75715e', '#f92672', '#a6e22e', '#f4bf75', '#66d9ef', '#ae81ff', '#a1efe4', '#f9f8f5']) },
+};
+
+// Replaced by the saved settings as soon as they arrive; these only cover the first instant.
+let settings = {
+  terminal: { fontFamily: 'Menlo, Monaco, "Courier New", monospace', fontSize: 13, theme: 'tavrix-dark', scrollback: 5000, cursorStyle: 'block', cursorBlink: true, copyOnSelect: false },
+  connection: { keepAliveSec: 30, compression: false, connectTimeoutSec: 20 },
+  defaults: null,
+};
+
+/** Global terminal settings with this session's overrides on top. */
+const effectivePrefs = (tab) => ({ ...settings.terminal, ...(tab?.termOverride || {}) });
+
+function termOptions(prefs) {
+  const family = /monospace/i.test(prefs.fontFamily) ? prefs.fontFamily : prefs.fontFamily + ', monospace';
+  return { fontFamily: family, fontSize: prefs.fontSize, cursorStyle: prefs.cursorStyle, cursorBlink: prefs.cursorBlink, scrollback: prefs.scrollback, theme: TERM_THEMES[prefs.theme] || TERM_THEMES['tavrix-dark'] };
+}
+
+function applyPrefsToPane(tab, pane) {
+  const o = termOptions(effectivePrefs(tab));
+  for (const [k, v] of Object.entries(o)) pane.term.options[k] = v;
+  pane.el.style.background = o.theme.background;
+}
+
+function applyPrefsToAll() {
+  for (const tab of tabs) {
+    for (const pane of tab.panes) applyPrefsToPane(tab, pane);
+    refit(tab);
+  }
+}
+
+const FONT_CHOICES = ['Menlo', 'Monaco', 'SF Mono', 'Courier New', 'JetBrains Mono', 'Fira Code', 'Source Code Pro'];
+
+/** Build the terminal appearance controls. With `withDefault`, every control can be left on "Default" (per-session overrides). */
+function terminalFields(root, prefix, { withDefault }) {
+  root.textContent = '';
+  const add = (label, control, id) => {
+    control.id = `${prefix}-${id}`;
+    const l = el('label', 'tfield');
+    l.append(el('span', '', label), control);
+    root.append(l);
+    return control;
+  };
+  const select = (options) => {
+    const sel = el('select');
+    if (withDefault) sel.append(new Option('Default', ''));
+    for (const [v, t] of options) sel.append(new Option(t, v));
+    return sel;
+  };
+  const font = add('Font', el('input'), 'font');
+  font.setAttribute('list', `${prefix}-fonts`);
+  font.placeholder = withDefault ? 'default' : 'Menlo';
+  const dl = el('datalist');
+  dl.id = `${prefix}-fonts`;
+  for (const f of FONT_CHOICES) dl.append(new Option(f));
+  root.append(dl);
+  const size = add('Font size', el('input'), 'size');
+  size.type = 'number'; size.min = 8; size.max = 32; size.placeholder = withDefault ? 'default' : '';
+  add('Theme', select(Object.entries(TERM_THEMES).map(([k, t]) => [k, t.label])), 'theme');
+  const sb = add('Scrollback lines', el('input'), 'scrollback');
+  sb.type = 'number'; sb.min = 0; sb.max = 100000; sb.placeholder = withDefault ? 'default' : '';
+  add('Cursor', select([['block', 'Block'], ['bar', 'Bar'], ['underline', 'Underline']]), 'cursor');
+  add('Cursor blinks', select([['true', 'Yes'], ['false', 'No']]), 'blink');
+  add('Copy on select', select([['true', 'Yes'], ['false', 'No']]), 'copy');
+}
+
+function fillTerminalFields(prefix, p = {}) {
+  const set = (id, v) => { $(`${prefix}-${id}`).value = v === undefined || v === null ? '' : String(v); };
+  set('font', p.fontFamily); set('size', p.fontSize); set('theme', p.theme); set('scrollback', p.scrollback);
+  set('cursor', p.cursorStyle); set('blink', p.cursorBlink); set('copy', p.copyOnSelect);
+}
+
+/** Only the controls that were set; blank/Default ones are left out so the global value applies. */
+function readTerminalFields(prefix) {
+  const v = (id) => $(`${prefix}-${id}`).value.trim();
+  const num = (id) => (v(id) === '' ? undefined : Number(v(id)));
+  const flag = (id) => (v(id) === '' ? undefined : v(id) === 'true');
+  const out = { fontFamily: v('font') || undefined, fontSize: num('size'), theme: v('theme') || undefined, scrollback: num('scrollback'), cursorStyle: v('cursor') || undefined, cursorBlink: flag('blink'), copyOnSelect: flag('copy') };
+  return Object.fromEntries(Object.entries(out).filter(([, x]) => x !== undefined));
+}
+
+window.api.settings.get().then((s) => { settings = s; applyPrefsToAll(); });
+window.api.settings.onChanged((s) => { settings = { ...settings, ...s }; applyPrefsToAll(); });
+
 /* ---------- tabs ---------- */
 
 function createTab(title) {
@@ -186,13 +278,17 @@ function createTab(title) {
 /** Add a terminal pane. With shell=false it is only a text area for messages (no remote shell). */
 async function addPane(tab, { shell = true } = {}) {
   const pane = { el: el('div', 'tpane'), shellId: null };
-  pane.term = new Terminal({ fontFamily: 'Menlo, monospace', fontSize: 13, cursorBlink: true });
+  pane.term = new Terminal(termOptions(effectivePrefs(tab)));
+  pane.el.style.background = termOptions(effectivePrefs(tab)).theme.background;
   pane.fit = new FitAddon.FitAddon();
   pane.term.loadAddon(pane.fit);
   tab.termEl.appendChild(pane.el);
   pane.term.open(pane.el);
   pane.el.addEventListener('mousedown', () => { tab.focused = pane; });
   pane.term.onData((d) => tab.sid && pane.shellId && window.api.write(tab.sid, pane.shellId, d));
+  pane.term.onSelectionChange(() => {
+    if (effectivePrefs(tab).copyOnSelect && pane.term.hasSelection()) navigator.clipboard?.writeText(pane.term.getSelection()).catch(() => {});
+  });
   tab.panes.push(pane);
   tab.focused = pane;
   refit(tab);
@@ -597,6 +693,10 @@ function closeEditor(tab, force = false) {
 async function connect(input, title) {
   const tab = createTab(title);
   tab.msgEl.textContent = 'Connecting...';
+  const saved = input.profileId ? profiles.find((p) => p.id === input.profileId) : null;
+  tab.termOverride = (saved ? saved.terminal : input.terminal) || null;
+  const startDir = (saved ? saved.startupDir : input.startupDir) || null;
+  for (const pane of tab.panes) applyPrefsToPane(tab, pane);
   let attempt = input;
   for (let tries = 0; tries < 3; tries++) {
     try {
@@ -604,7 +704,7 @@ async function connect(input, title) {
       tab.sid = res.id;
       bySid.set(res.id, tab);
       tab.msgEl.textContent = 'Connected';
-      browse(tab, res.home);
+      openStartFolder(tab, startDir, res.home);
       await addPane(tab);
       return;
     } catch (err) {
@@ -619,6 +719,15 @@ async function connect(input, title) {
     }
   }
   connectFailed(tab, 'Authentication failed');
+}
+
+/** Show the session's start-in folder in the file panel, or the home folder if that is missing or not given. */
+async function openStartFolder(tab, startDir, home) {
+  if (startDir) {
+    await browse(tab, startDir);
+    if (tab.cwd === startDir) return;
+  }
+  browse(tab, home);
 }
 
 async function connectFailed(tab, message) {
@@ -648,36 +757,63 @@ window.addEventListener('resize', () => active && refit(active));
 
 let profiles = [];
 
-async function loadProfiles() {
-  profiles = (await window.api.profiles.list()).sort((a, b) => a.name.localeCompare(b.name));
+function collapsedFolders() {
+  try { return new Set(JSON.parse(localStorage.getItem('tavrix.collapsed') || '[]')); } catch { return new Set(); }
+}
+function toggleFolder(name) {
+  const set = collapsedFolders();
+  set.has(name) ? set.delete(name) : set.add(name);
+  writePref('collapsed', JSON.stringify([...set]));
+  renderSessions();
+}
+
+function sessionRow(p, indent) {
+  const li = el('li', indent ? 'indent' : '');
+  const info = el('div');
+  info.append(el('div', '', p.name));
+  const via = p.jumpHostId ? ' via ' + (profiles.find((x) => x.id === p.jumpHostId)?.name ?? '?') : '';
+  info.append(el('small', '', `${p.username}@${p.host}${p.port !== 22 ? ':' + p.port : ''}${via}`));
+  const tools = el('span', 'tools');
+  const edit = el('button', 'x', '✎');
+  edit.title = 'Edit saved session';
+  edit.onclick = (e) => { e.stopPropagation(); openSessionDialog(p); };
+  const x = el('button', 'x', '×');
+  x.title = 'Delete saved session';
+  x.onclick = async (e) => {
+    e.stopPropagation();
+    const users = profiles.filter((o) => o.jumpHostId === p.id).map((o) => o.name);
+    const warn = users.length ? `\n\n${users.join(', ')} use it as a jump host and will stop working.` : '';
+    if (confirm('Delete saved session "' + p.name + '"?' + warn)) {
+      await window.api.profiles.remove(p.id);
+      loadProfiles();
+    }
+  };
+  tools.append(edit, x);
+  li.append(info, tools);
+  li.onclick = () => connect({ profileId: p.id }, p.name);
+  return li;
+}
+
+function renderSessions() {
   const ul = $('sessionList');
   ul.textContent = '';
-  for (const p of profiles) {
-    const li = el('li');
-    const info = el('div');
-    info.append(el('div', '', p.name));
-    const via = p.jumpHostId ? ' via ' + (profiles.find((x) => x.id === p.jumpHostId)?.name ?? '?') : '';
-    info.append(el('small', '', `${p.username}@${p.host}${p.port !== 22 ? ':' + p.port : ''}${via}`));
-    const tools = el('span', 'tools');
-    const edit = el('button', 'x', '✎');
-    edit.title = 'Edit saved session';
-    edit.onclick = (e) => { e.stopPropagation(); openSessionDialog(p); };
-    const x = el('button', 'x', '×');
-    x.title = 'Delete saved session';
-    x.onclick = async (e) => {
-      e.stopPropagation();
-      const users = profiles.filter((o) => o.jumpHostId === p.id).map((o) => o.name);
-      const warn = users.length ? `\n\n${users.join(', ')} use it as a jump host and will stop working.` : '';
-      if (confirm('Delete saved session "' + p.name + '"?' + warn)) {
-        await window.api.profiles.remove(p.id);
-        loadProfiles();
-      }
-    };
-    tools.append(edit, x);
-    li.append(info, tools);
-    li.onclick = () => connect({ profileId: p.id }, p.name);
-    ul.appendChild(li);
+  const collapsed = collapsedFolders();
+  const loose = profiles.filter((p) => !p.folder);
+  for (const p of loose) ul.appendChild(sessionRow(p, false));
+  const names = [...new Set(profiles.filter((p) => p.folder).map((p) => p.folder))].sort((a, b) => a.localeCompare(b));
+  for (const name of names) {
+    const members = profiles.filter((p) => p.folder === name);
+    const head = el('li', 'folder', (collapsed.has(name) ? '▸ ' : '▾ ') + name);
+    head.append(el('small', '', String(members.length)));
+    head.onclick = () => toggleFolder(name);
+    ul.appendChild(head);
+    if (!collapsed.has(name)) for (const p of members) ul.appendChild(sessionRow(p, true));
   }
+}
+
+async function loadProfiles() {
+  profiles = (await window.api.profiles.list()).sort((a, b) => a.name.localeCompare(b.name));
+  renderSessions();
 }
 
 $('import').onclick = async () => {
@@ -691,12 +827,26 @@ $('import').onclick = async () => {
 
 /* ---------- new / edit connection dialog ---------- */
 
+terminalFields($('f-term'), 'ft', { withDefault: true });
+
+function showSessionTab(name) {
+  for (const b of $('sTabs').children) b.classList.toggle('on', b.dataset.tab === name);
+  for (const pane of $('dlg').querySelectorAll('.tabpane')) pane.hidden = pane.dataset.pane !== name;
+}
+$('sTabs').onclick = (e) => { if (e.target.dataset.tab) showSessionTab(e.target.dataset.tab); };
+// A required field on another tab would block submit silently; jump to the tab that has the problem.
+$('form').addEventListener('invalid', (e) => { const pane = e.target.closest('.tabpane'); if (pane) showSessionTab(pane.dataset.pane); }, true);
+
 function openSessionDialog(p) {
   $('form').reset();
+  showSessionTab('basic');
   const jump = $('f-jump');
   jump.textContent = '';
   jump.append(new Option('None', ''));
   for (const o of profiles) if (!p || o.id !== p.id) jump.append(new Option(`${o.name} (${o.username}@${o.host})`, o.id));
+  const dl = $('folderList');
+  dl.textContent = '';
+  for (const f of new Set(profiles.map((o) => o.folder).filter(Boolean))) dl.append(new Option(f));
   $('f-id').value = p ? p.id : '';
   $('dlgTitle').textContent = p ? 'Edit session' : 'New connection';
   $('f-go').textContent = p ? 'Save' : 'Connect';
@@ -709,33 +859,89 @@ function openSessionDialog(p) {
   $('f-key').value = p?.privateKeyPath ?? '';
   $('f-pass').placeholder = p?.hasSecret ? 'Saved; leave blank to keep it' : 'Password (or key passphrase)';
   jump.value = p?.jumpHostId ?? '';
+  $('f-keepalive').value = p?.keepAliveSec ?? '';
+  $('f-compress').value = p?.compression === undefined ? '' : String(p.compression);
+  $('f-timeout').value = p?.connectTimeoutSec ?? '';
+  $('f-sdir').value = p?.startupDir ?? '';
+  $('f-scmd').value = p?.startupCommand ?? '';
+  $('f-folder').value = p?.folder ?? '';
+  fillTerminalFields('ft', p?.terminal);
   $('dlg').showModal();
   $('f-host').focus();
+}
+
+function readSessionForm() {
+  const num = (id) => ($(id).value.trim() === '' ? undefined : Number($(id).value));
+  const text = (id) => $(id).value.trim() || undefined;
+  const host = $('f-host').value.trim();
+  const username = $('f-user').value.trim();
+  return {
+    id: $('f-id').value || undefined,
+    name: $('f-name').value.trim() || `${username || 'me'}@${host}`,
+    host, username,
+    port: Number($('f-port').value) || 22,
+    privateKeyPath: text('f-key'),
+    jumpHostId: $('f-jump').value || undefined,
+    folder: text('f-folder'),
+    keepAliveSec: num('f-keepalive'),
+    compression: $('f-compress').value === '' ? undefined : $('f-compress').value === 'true',
+    connectTimeoutSec: num('f-timeout'),
+    startupDir: text('f-sdir'),
+    startupCommand: text('f-scmd'),
+    terminal: readTerminalFields('ft'),
+  };
 }
 
 $('new').onclick = () => openSessionDialog(null);
 $('f-cancel').onclick = () => $('dlg').close();
 $('form').onsubmit = async (ev) => {
   ev.preventDefault();
-  const editing = $('f-id').value || undefined;
-  const host = $('f-host').value.trim();
-  const username = $('f-user').value.trim();
-  const port = Number($('f-port').value) || 22;
+  const form = readSessionForm();
   const password = $('f-pass').value;
-  const privateKeyPath = $('f-key').value.trim() || undefined;
-  const jumpHostId = $('f-jump').value || undefined;
-  const name = $('f-name').value.trim() || `${username || 'me'}@${host}`;
+  const editing = form.id;
   $('dlg').close();
   try {
     if (editing || $('f-save').checked) {
-      const id = await window.api.profiles.save({ id: editing, name, host, port, username, privateKeyPath, jumpHostId }, password || undefined);
+      const id = await window.api.profiles.save(form, password || undefined);
       await loadProfiles();
-      if (!editing) connect({ profileId: id }, name);
+      if (!editing) connect({ profileId: id }, form.name);
     } else {
-      connect({ host, port, username, password, privateKeyPath, jumpHostId }, name);
+      connect({ ...form, password }, form.name);
     }
   } catch (err) {
-    note('Could not save: ' + (err.message || err));
+    note('Could not save: ' + String(err.message || err).replace(/^Error invoking remote method '[^']*': (Error: )?/, ''));
+  }
+};
+
+/* ---------- global settings ---------- */
+
+terminalFields($('set-term'), 'st', { withDefault: false });
+
+function fillSettings(s) {
+  fillTerminalFields('st', s.terminal);
+  $('set-keepalive').value = s.connection.keepAliveSec;
+  $('set-compress').checked = s.connection.compression;
+  $('set-timeout').value = s.connection.connectTimeoutSec;
+}
+
+function openSettings() {
+  fillSettings(settings);
+  $('settings').showModal();
+}
+window.api.settings.onOpen(openSettings);
+$('set-cancel').onclick = () => $('settings').close();
+$('set-reset').onclick = () => { if (settings.defaults) fillSettings(settings.defaults); };
+$('setForm').onsubmit = async (ev) => {
+  ev.preventDefault();
+  try {
+    settings = { ...settings, ...(await window.api.settings.set({
+      terminal: readTerminalFields('st'),
+      connection: { keepAliveSec: Number($('set-keepalive').value), compression: $('set-compress').checked, connectTimeoutSec: Number($('set-timeout').value) },
+    })) };
+    $('settings').close();
+    applyPrefsToAll();
+  } catch (err) {
+    note('Could not save settings: ' + String(err.message || err));
   }
 };
 

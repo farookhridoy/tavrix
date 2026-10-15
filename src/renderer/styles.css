@@ -97,3 +97,23 @@ dialog label select { display: block; width: 100%; margin-top: 4px; }
 
 .files.loading { opacity: .5; transition: opacity .15s; }
 .cwd { min-height: 28px; }
+
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid #444; margin-bottom: 4px; }
+.tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; padding: 5px 10px; color: #aaa; }
+.tabs button.on { color: #fff; border-bottom-color: #3794ff; }
+.tabpane { display: flex; flex-direction: column; gap: 8px; }
+.tabpane[hidden] { display: none; }
+dialog label { display: flex; flex-direction: column; gap: 4px; }
+dialog label:has(> input[type=checkbox]) { flex-direction: row; align-items: center; gap: 6px; }
+dialog code { background: #1e1e1e; padding: 0 4px; border-radius: 3px; }
+#dlg { width: 480px; }
+#settings { width: 480px; }
+#setForm { display: flex; flex-direction: column; gap: 8px; }
+#setForm h4 { margin: 6px 0 0; color: #9cdcfe; font-weight: 600; }
+#setForm .hint { margin: 0; color: #888; font-size: 12px; }
+.tfield { display: grid; grid-template-columns: 130px 1fr; align-items: center; gap: 8px; }
+.tfield span { color: #aaa; font-size: 12px; }
+.tfield input, .tfield select { min-width: 0; }
+#sessionList li.folder { cursor: pointer; color: #9cdcfe; font-weight: 600; padding: 5px 10px 3px; justify-content: flex-start; gap: 6px; }
+#sessionList li.folder small { color: #666; font-weight: 400; display: inline; }
+#sessionList li.indent { padding-left: 22px; }

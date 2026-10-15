@@ -11,6 +11,12 @@ contextBridge.exposeInMainWorld('api', {
     start: (id: string, spec: unknown) => ipcRenderer.invoke('fwd:start', id, spec),
     stop: (id: string, fwdId: string) => ipcRenderer.invoke('fwd:stop', id, fwdId),
   },
+  settings: {
+    get: () => ipcRenderer.invoke('settings:get'),
+    set: (patch: unknown) => ipcRenderer.invoke('settings:set', patch),
+    onChanged: (cb: (s: unknown) => void) => ipcRenderer.on('settings:changed', (_e, s) => cb(s)),
+    onOpen: (cb: () => void) => ipcRenderer.on('ui:open-settings', () => cb()),
+  },
   update: {
     open: (kind: 'download' | 'notes') => ipcRenderer.invoke('update:open', kind),
     skip: () => ipcRenderer.invoke('update:skip'),

@@ -1,6 +1,7 @@
 import { app, safeStorage } from 'electron';
 import { join } from 'node:path';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { TerminalPrefs, ConnectionPrefs, DEFAULT_TERMINAL, DEFAULT_CONNECTION, sanitizeTerminal, sanitizeConnection } from './prefs';
 
 export interface Profile {
   id: string;
@@ -11,6 +12,17 @@ export interface Profile {
   privateKeyPath?: string;
   /** Saved session to pass through first (ProxyJump). */
   jumpHostId?: string;
+  /** Group in the sidebar. */
+  folder?: string;
+  /** Typed into the first shell after login: `cd` to this folder, then run the command. */
+  startupDir?: string;
+  startupCommand?: string;
+  /** Connection options; undefined means the global default. */
+  keepAliveSec?: number;
+  compression?: boolean;
+  connectTimeoutSec?: number;
+  /** Terminal appearance overrides for this session; undefined fields use the global setting. */
+  terminal?: Partial<TerminalPrefs>;
   /** base64 of safeStorage-encrypted password/passphrase (macOS Keychain-backed). */
   secret?: string;
 }
@@ -99,12 +111,36 @@ export interface Settings {
   updateCheck: boolean;
   /** A release version the user chose not to be told about again. */
   skippedVersion?: string;
+  /** Terminal appearance for every session unless the session overrides it. */
+  terminal: TerminalPrefs;
+  /** Connection defaults for every session unless the session overrides them. */
+  connection: ConnectionPrefs;
+}
+
+interface StoredSettings extends Partial<Omit<Settings, 'terminal' | 'connection'>> {
+  terminal?: unknown;
+  connection?: unknown;
 }
 
 export function getSettings(): Settings {
-  return { updateCheck: true, ...load<Partial<Settings>>('settings.json', {}) };
+  const stored = load<StoredSettings>('settings.json', {});
+  return {
+    updateCheck: stored.updateCheck ?? true,
+    skippedVersion: stored.skippedVersion,
+    terminal: { ...DEFAULT_TERMINAL, ...sanitizeTerminal(stored.terminal) },
+    connection: { ...DEFAULT_CONNECTION, ...sanitizeConnection(stored.connection) },
+  };
 }
 
-export function saveSettings(patch: Partial<Settings>): void {
-  save('settings.json', { ...getSettings(), ...patch });
+/** Merge a change into the saved settings. Terminal and connection values are validated; unknown keys are ignored. */
+export function saveSettings(patch: { updateCheck?: boolean; skippedVersion?: string; terminal?: unknown; connection?: unknown }): Settings {
+  const cur = getSettings();
+  const next: Settings = {
+    updateCheck: typeof patch.updateCheck === 'boolean' ? patch.updateCheck : cur.updateCheck,
+    skippedVersion: 'skippedVersion' in patch ? patch.skippedVersion : cur.skippedVersion,
+    terminal: { ...cur.terminal, ...sanitizeTerminal(patch.terminal) },
+    connection: { ...cur.connection, ...sanitizeConnection(patch.connection) },
+  };
+  save('settings.json', next);
+  return next;
 }

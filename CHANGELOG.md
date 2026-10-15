@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.4.0: settings
+- **Settings window** (Tavrix menu > Settings…, Cmd+,): terminal font, size, theme (Tavrix Dark, Light, Solarized Dark, Dracula, Monokai), scrollback, cursor style and blinking, copy on select, plus connection defaults. Changes apply to open terminals immediately.
+- **Session dialog is now tabbed** like MobaXterm's: Basic, Advanced, Terminal, Bookmark.
+  - Advanced: jump host, keep-alive, compression, connect timeout, **start in folder** and **run command after login**.
+  - Terminal: override any appearance setting for one session; blank means "use the default".
+  - Bookmark: put the session in a **folder** in the sidebar (collapsible; remembered).
+- Keep-alive is now on by default (every 30 s), so idle sessions are not silently dropped by routers, and a dead link is noticed after about 90 s instead of hanging.
+- Startup folder/command are typed into the first terminal as you would type them, so they are visible; split panes do not repeat them. The file panel also starts in the startup folder.
+- Fix: a second error from a dropped or failed connection could crash the app with a "JavaScript error in the main process" dialog. Connections now keep an error handler for their whole life.
+- Saving a session now stores only known, validated fields; settings sent to the main process are clamped (font size 8-32, scrollback 0-100000, keep-alive 0-3600 s, timeout 5-120 s).
+- Not covered by automated tests: the Settings menu item and its Cmd+, shortcut (the window it opens is).
+
 ## 1.3.0
 - **Faster file panel over a network.** Measured on a simulated slow link: a 3,000-file folder 1.49 s -> 0.18 s at 40 ms round-trip latency and 4.2 s -> 0.5 s at 120 ms. Folder listings now keep several directory requests in flight instead of one per round trip.
 - Opening a file takes about 2 round trips regardless of size (the size check and the open are sent together and the data is read in parallel pieces).

@@ -187,3 +187,32 @@ test('several shells share one connection and stay independent', { skip }, async
     s.close();
   }
 });
+
+test('connection options: keep-alive, compression and timeout are accepted and the connection stays usable', { skip }, async () => {
+  const s = new Session();
+  await s.connect({ ...cfg(), keepAliveSec: 1, compression: true, connectTimeoutSec: 10 }, yes);
+  try {
+    // idle for several keep-alive periods: the server must answer the probes, or the client would close the link
+    await new Promise((r) => setTimeout(r, 3500));
+    assert.ok((await s.list(await s.realpath('.'))).length > 0, 'still connected after idling');
+    const f = await s.forwards.start({ kind: 'dynamic', bindHost: '127.0.0.1', bindPort: 0 });
+    assert.ok(f.bindPort > 0, 'other features work on a compressed connection');
+  } finally {
+    s.close();
+  }
+  const off = new Session();
+  await off.connect({ ...cfg(), keepAliveSec: 0 }, yes);
+  assert.ok(await off.realpath('.'), 'keep-alive 0 (off) also connects');
+  off.close();
+});
+
+test('a connection that cannot be completed in time fails instead of hanging', { skip }, async () => {
+  // a server that accepts the TCP connection and then says nothing
+  const mute = createServer(() => {});
+  const port = await new Promise<number>((r) => mute.listen(0, '127.0.0.1', () => r((mute.address() as AddressInfo).port)));
+  const s = new Session();
+  const started = Date.now();
+  await assert.rejects(s.connect({ host: '127.0.0.1', port, username: 'u', password: 'x', connectTimeoutSec: 5 }, yes), /timed out|timeout|handshake/i);
+  assert.ok(Date.now() - started < 9000, 'gave up after about 5 seconds');
+  mute.close();
+});

@@ -46,7 +46,10 @@
 - [x] "Make executable" for files that start with `#!` but are not executable
 - [x] Refuses to open binary, non-UTF-8 or >5 MB files as text (saving would corrupt them)
 
-## v1.3.0 (current): faster file panel
+## v1.4.0 (current): settings
+- [x] Settings window, tabbed session dialog, per-session terminal overrides, keep-alive/compression/timeout, startup folder and command, sidebar folders
+
+## v1.3.0: faster file panel
 - [x] Pipelined folder reads, ~2-round-trip file open, remembered folders, single-click folders
 
 ## v1.2.0: update notice
@@ -54,6 +57,7 @@
 - [x] Check for Updates menu item, automatic checks can be turned off, versions can be skipped
 
 ## Next
+- [ ] More session types from MobaXterm's list: SFTP-only, FTP, Telnet, then VNC/RDP launchers
 - [ ] Saved tunnels that start with a session; prompt for jump-host secrets
 - [ ] Nested split layouts; mixed row/column
 - [ ] Atomic save (write to a temp file, then rename) to survive a dropped connection mid-save

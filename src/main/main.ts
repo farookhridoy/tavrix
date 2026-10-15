@@ -22,9 +22,12 @@ import {
   getSettings,
   saveSettings,
 } from './store';
+import { sanitizeConnection, sanitizeTerminal, sanitizeFolder, startupInput, DEFAULT_TERMINAL, DEFAULT_CONNECTION } from './prefs';
 import { checkForUpdate, openTarget, FEED_URL, UpdateInfo } from './updates';
 
 const sessions = new Map<string, Session>();
+/** Startup input per connection, typed into the first shell opened on it and then forgotten. */
+const pendingStartup = new Map<string, string>();
 
 interface ConnectInput extends Partial<ConnectRequest> {
   profileId?: string;
@@ -32,6 +35,9 @@ interface ConnectInput extends Partial<ConnectRequest> {
   jumpHostId?: string;
   /** Password or key passphrase typed at connect time; never persisted. */
   secret?: string;
+  /** For an unsaved connection: typed into the first shell. */
+  startupDir?: string;
+  startupCommand?: string;
 }
 
 /** Marker the renderer matches to ask the user for a password/passphrase and retry. */
@@ -51,6 +57,8 @@ function resolveRequest(input: ConnectInput): ConnectRequest {
   const base = input.profileId ? profileBase(input.profileId) : input;
   const { host, port, username, privateKeyPath } = base;
   if (!host) throw new Error('Host is required');
+  const defaults = getSettings().connection;
+  const own = sanitizeConnection(base);
   const secret = input.secret ?? input.password ?? (input.profileId ? readProfileSecret(input.profileId) : undefined);
   return {
     host,
@@ -60,6 +68,36 @@ function resolveRequest(input: ConnectInput): ConnectRequest {
     privateKeyPath: privateKeyPath || undefined,
     password: privateKeyPath ? undefined : secret,
     passphrase: privateKeyPath ? secret : undefined,
+    keepAliveSec: own.keepAliveSec ?? defaults.keepAliveSec,
+    compression: own.compression ?? defaults.compression,
+    connectTimeoutSec: own.connectTimeoutSec ?? defaults.connectTimeoutSec,
+  };
+}
+
+/** What to type into the first shell of this connection (startup folder and command), or ''. */
+function startupFor(input: ConnectInput): string {
+  const src = input.profileId ? profileBase(input.profileId) : input;
+  return startupInput(src.startupDir, src.startupCommand);
+}
+
+/** The only fields a saved session may have, each validated; anything else the UI sends is dropped. */
+function cleanProfile(p: Partial<Profile> & Record<string, unknown>, id: string): Profile {
+  const text = (v: unknown, max = 500): string | undefined => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined);
+  const conn = sanitizeConnection(p);
+  const terminal = sanitizeTerminal(p.terminal);
+  return {
+    id,
+    name: text(p.name, 100) ?? 'Untitled',
+    host: text(p.host, 255) ?? '',
+    port: Math.min(65535, Math.max(1, Math.round(Number(p.port)) || 22)),
+    username: text(p.username, 100) ?? '',
+    privateKeyPath: text(p.privateKeyPath, 1000),
+    jumpHostId: text(p.jumpHostId, 100),
+    folder: sanitizeFolder(p.folder),
+    startupDir: text(p.startupDir, 1000),
+    startupCommand: text(p.startupCommand, 2000),
+    ...conn,
+    terminal: Object.keys(terminal).length ? terminal : undefined,
   };
 }
 
@@ -177,6 +215,13 @@ function buildMenu(): void {
       label: app.name,
       submenu: [
         { role: 'about' },
+        { type: 'separator' },
+        {
+          label: 'Settings…',
+          accelerator: 'CmdOrCtrl+,',
+          click: () => BrowserWindow.getAllWindows()[0]?.webContents.send('ui:open-settings'),
+        },
+        { type: 'separator' },
         { label: 'Check for Updates…', click: () => void runUpdateCheck(true) },
         {
           label: 'Check for Updates Automatically',
@@ -235,14 +280,16 @@ function registerIpc(): void {
       throw classifyConnectError(err, req);
     }
     sessions.set(id, session);
+    pendingStartup.set(id, startupFor(input));
     session.onDisconnect(() => {
+      pendingStartup.delete(id);
       if (sessions.delete(id)) e.sender.send('ssh:closed', id);
     });
     return { id, home: await session.realpath('.') };
   });
   ipcMain.handle('ssh:open-shell', (e, id: string, cols: number, rows: number) => {
     const session = get(id);
-    return session.openShell(
+    const opened = session.openShell(
       cols,
       rows,
       (shellId, d) => e.sender.send('ssh:data', id, shellId, d),
@@ -252,6 +299,13 @@ function registerIpc(): void {
         if (session.shellCount() === 0) session.close();
       },
     );
+    return opened.then((shellId) => {
+      // Only the first shell gets the startup folder/command. It is typed like a user would, so it is visible in the terminal.
+      const startup = pendingStartup.get(id);
+      pendingStartup.delete(id);
+      if (startup) session.write(shellId, startup);
+      return shellId;
+    });
   });
   ipcMain.on('ssh:write', (_e, id: string, shellId: string, data: string) => sessions.get(id)?.write(shellId, data));
   ipcMain.on('ssh:resize', (_e, id: string, shellId: string, cols: number, rows: number) => sessions.get(id)?.resize(shellId, cols, rows));
@@ -333,6 +387,14 @@ function registerIpc(): void {
     pendingUpdate = null;
   });
 
+  ipcMain.handle('settings:get', () => ({ ...getSettings(), defaults: { terminal: DEFAULT_TERMINAL, connection: DEFAULT_CONNECTION } }));
+  ipcMain.handle('settings:set', (_e, patch: { terminal?: unknown; connection?: unknown }) => {
+    // The renderer may change appearance and connection defaults; update-check fields stay under the menu's control.
+    const next = saveSettings({ terminal: patch?.terminal, connection: patch?.connection });
+    for (const w of BrowserWindow.getAllWindows()) w.webContents.send('settings:changed', next);
+    return next;
+  });
+
   ipcMain.handle('fwd:list', (_e, id: string) => get(id).forwards.list());
   ipcMain.handle('fwd:start', async (e, id: string, raw: ForwardSpec) => {
     const spec: ForwardSpec = {
@@ -373,16 +435,17 @@ function registerIpc(): void {
   ipcMain.handle('profiles:list', () => listProfiles().map(publicProfile));
   ipcMain.handle(
     'profiles:save',
-    (_e, p: Omit<Profile, 'id' | 'secret'> & { id?: string }, secret?: string) => {
-      const profile: Profile = { ...p, id: p.id ?? randomUUID() };
+    (_e, p: Partial<Profile> & Record<string, unknown>, secret?: string) => {
+      const profile = cleanProfile(p, typeof p.id === 'string' && p.id ? p.id : randomUUID());
+      if (!profile.host) throw new Error('A host is required');
       if (profile.jumpHostId && (profile.jumpHostId === profile.id || !getProfile(profile.jumpHostId))) {
         throw new Error('Choose a different saved session as the jump host');
       }
-      if (!profile.jumpHostId) delete profile.jumpHostId;
       saveProfile(profile, secret || undefined);
       return profile.id;
     },
   );
+
   ipcMain.handle('profiles:delete', (_e, id: string) => deleteProfile(id));
   ipcMain.handle('profiles:import-ssh-config', () => {
     let text: string;
