@@ -10,7 +10,7 @@ npm start
 Click + for a new connection (optionally through a jump host) (password, or private key path), or pick a saved session. Click a folder to open it, double-click a file to edit it (Cmd+S saves), right-click for download/rename/permissions/delete, and drag files onto the file panel to upload.
 
 ## Settings
-**Tavrix menu > Settings…** (Cmd+,) sets the terminal look (font, size, theme, scrollback, cursor) and connection defaults for every session. Each saved session can override them: its dialog has **Basic**, **Advanced** (jump host, keep-alive, compression, timeout, start-in folder, run-after-login command), **Terminal** and **Bookmark** (sidebar folder) tabs. Leave a field blank to use the default.
+The **⚙ button** in the sidebar (or **Tavrix menu > Settings…**, Cmd+,) sets the terminal look (font, size, theme, scrollback, cursor) and connection defaults for every session. Each saved session can override them: its dialog has **Basic**, **Advanced** (jump host, keep-alive, compression, timeout, start-in folder, run-after-login command), **Terminal** and **Bookmark** (sidebar folder) tabs. Leave a field blank to use the default.
 
 ## Also
 - **Split** the terminal (status bar), **Tunnels** for -L/-R/-D forwarding, **Snippets** in the sidebar.

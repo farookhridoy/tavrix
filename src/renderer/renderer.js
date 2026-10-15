@@ -929,6 +929,7 @@ function openSettings() {
   $('settings').showModal();
 }
 window.api.settings.onOpen(openSettings);
+$('gear').onclick = openSettings;
 $('set-cancel').onclick = () => $('settings').close();
 $('set-reset').onclick = () => { if (settings.defaults) fillSettings(settings.defaults); };
 $('setForm').onsubmit = async (ev) => {
