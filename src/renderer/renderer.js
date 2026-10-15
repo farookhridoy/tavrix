@@ -14,6 +14,65 @@ function note(msg) {
   $('notice').textContent = msg;
 }
 
+/* ---------- helpers ---------- */
+
+const joinPath = (dir, name) => (dir === '/' ? '' : dir.replace(/\/$/, '')) + '/' + name;
+const parentPath = (p) => p.replace(/\/[^/]+\/?$/, '') || '/';
+const human = (n) => (n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : n < 1073741824 ? (n / 1048576).toFixed(1) + ' MB' : (n / 1073741824).toFixed(2) + ' GB');
+
+function ask(title, value = '') {
+  return new Promise((resolve) => {
+    const dlg = $('ask');
+    $('askTitle').textContent = title;
+    $('askInput').value = value;
+    let result = null;
+    $('askForm').onsubmit = (e) => { e.preventDefault(); result = $('askInput').value.trim(); dlg.close(); };
+    $('askCancel').onclick = () => dlg.close();
+    dlg.onclose = () => resolve(result || null);
+    dlg.showModal();
+    $('askInput').select();
+  });
+}
+
+function showMenu(x, y, items) {
+  const m = $('menu');
+  m.textContent = '';
+  for (const it of items) {
+    if (it === '-') { m.appendChild(document.createElement('hr')); continue; }
+    const d = el('div', '', it.label);
+    d.onclick = () => { hideMenu(); it.run(); };
+    m.appendChild(d);
+  }
+  m.hidden = false;
+  m.style.left = Math.min(x, window.innerWidth - 180) + 'px';
+  m.style.top = Math.min(y, window.innerHeight - m.offsetHeight - 8) + 'px';
+}
+function hideMenu() { $('menu').hidden = true; }
+window.addEventListener('click', hideMenu);
+window.addEventListener('blur', hideMenu);
+window.addEventListener('dragover', (e) => e.preventDefault());
+window.addEventListener('drop', (e) => e.preventDefault());
+
+// Monaco cancels in-flight work when a model is disposed; that rejection is expected.
+window.addEventListener('unhandledrejection', (e) => { if (e.reason && e.reason.message === 'Canceled') e.preventDefault(); });
+
+let monacoPromise;
+function loadMonaco() {
+  monacoPromise ??= new Promise((resolve, reject) => {
+    const base = new URL('../../node_modules/monaco-editor/min/', location.href).href;
+    // Monaco's worker bootstrap needs an absolute baseUrl; a blob worker pulls in the bundled worker code.
+    window.MonacoEnvironment = {
+      getWorkerUrl: () => URL.createObjectURL(new Blob(
+        [`self.MonacoEnvironment={baseUrl:'${base}'};importScripts('${base}vs/base/worker/workerMain.js');`],
+        { type: 'text/javascript' },
+      )),
+    };
+    require.config({ paths: { vs: base + 'vs' } });
+    require(['vs/editor/editor.main'], () => resolve(window.monaco), reject);
+  });
+  return monacoPromise;
+}
+
 /* ---------- tabs ---------- */
 
 function createTab(title) {
@@ -28,9 +87,32 @@ function createTab(title) {
 
   tab.pane = el('div', 'pane');
   const aside = el('aside');
+  const tools = el('div', 'ftools');
+  const mkBtn = (label, title, fn) => { const b = el('button', '', label); b.title = title; b.onclick = fn; tools.appendChild(b); };
+  mkBtn('↑', 'Parent folder', () => tab.sid && browse(tab, parentPath(tab.cwd)));
+  mkBtn('⟳', 'Refresh', () => tab.sid && browse(tab, tab.cwd));
+  mkBtn('+ Folder', 'New folder', () => newFolder(tab));
+  mkBtn('Upload', 'Upload files or folders', () => upload(tab));
   tab.cwdEl = el('div', 'cwd', '/');
   tab.filesEl = el('ul', 'files');
-  aside.append(tab.cwdEl, tab.filesEl);
+  aside.append(tools, tab.cwdEl, tab.filesEl);
+  aside.addEventListener('dragover', (e) => { e.preventDefault(); aside.classList.add('dragover'); });
+  aside.addEventListener('dragleave', (e) => { if (e.target === aside || !aside.contains(e.relatedTarget)) aside.classList.remove('dragover'); });
+  aside.addEventListener('drop', (e) => {
+    e.preventDefault();
+    aside.classList.remove('dragover');
+    const paths = [...e.dataTransfer.files].map((f) => window.api.pathFor(f)).filter(Boolean);
+    if (paths.length) upload(tab, paths);
+  });
+  tab.filesEl.addEventListener('contextmenu', (e) => {
+    if (e.target !== tab.filesEl) return;
+    e.preventDefault();
+    showMenu(e.clientX, e.clientY, [
+      { label: 'New folder', run: () => newFolder(tab) },
+      { label: 'Upload here…', run: () => upload(tab) },
+      { label: 'Refresh', run: () => browse(tab, tab.cwd) },
+    ]);
+  });
   const work = el('div', 'work');
   tab.termEl = el('div', 'term');
   tab.editorEl = el('div', 'editor');
@@ -40,10 +122,14 @@ function createTab(title) {
   const save = el('button', '', 'Save');
   const closeEdit = el('button', '', 'Close');
   bar.append(tab.editPathEl, save, closeEdit);
-  tab.editArea = el('textarea', 'editarea');
-  tab.editArea.spellcheck = false;
-  tab.editorEl.append(bar, tab.editArea);
+  tab.monacoEl = el('div', 'monaco');
+  tab.editorEl.append(bar, tab.monacoEl);
   tab.statusEl = el('div', 'status');
+  tab.msgEl = el('span', 'msg');
+  tab.progEl = el('progress');
+  tab.progEl.hidden = true;
+  tab.progEl.max = 1;
+  tab.statusEl.append(tab.msgEl, tab.progEl);
   work.append(tab.termEl, tab.editorEl, tab.statusEl);
   tab.pane.append(aside, work);
 
@@ -83,6 +169,8 @@ function refit(tab) {
 function closeTab(tab) {
   if (tab.editing && tab.editDirty && !confirm('Discard unsaved changes in ' + tab.editing + '?')) return;
   if (tab.sid) { window.api.disconnect(tab.sid); bySid.delete(tab.sid); }
+  tab.editor?.dispose();
+  tab.model?.dispose();
   tab.term.dispose();
   tab.header.remove();
   tab.pane.remove();
@@ -91,7 +179,7 @@ function closeTab(tab) {
   if (tabs.length) activate(tabs[tabs.length - 1]);
 }
 
-/* ---------- files and editor ---------- */
+/* ---------- files ---------- */
 
 async function browse(tab, path) {
   try {
@@ -99,53 +187,174 @@ async function browse(tab, path) {
     tab.cwd = path;
     tab.cwdEl.textContent = path;
     tab.filesEl.textContent = '';
-    if (path !== '/') items.unshift({ name: '..', isDir: true });
+    if (path !== '/') {
+      const up = el('li', '', '📁 ..');
+      up.onclick = () => browse(tab, parentPath(path));
+      tab.filesEl.appendChild(up);
+    }
     for (const e of items) {
-      const li = el('li', '', (e.isDir ? '📁 ' : '📄 ') + e.name);
+      const li = el('li');
+      li.append(el('span', '', (e.isDir ? '📁 ' : e.isLink ? '🔗 ' : '📄 ') + e.name), el('small', '', e.isDir ? '' : human(e.size)));
+      const full = joinPath(path, e.name);
       li.onclick = () => {
-        const next = e.name === '..'
-          ? path.replace(/\/[^/]+\/?$/, '') || '/'
-          : (path === '/' ? '' : path) + '/' + e.name;
-        e.isDir ? browse(tab, next) : openFile(tab, next);
+        for (const x of tab.filesEl.children) x.classList.remove('sel');
+        li.classList.add('sel');
+      };
+      li.ondblclick = () => (e.isDir ? browse(tab, full) : openFile(tab, full));
+      li.oncontextmenu = (ev) => {
+        ev.preventDefault();
+        li.onclick();
+        showMenu(ev.clientX, ev.clientY, [
+          { label: e.isDir ? 'Open folder' : 'Edit', run: () => (e.isDir ? browse(tab, full) : openFile(tab, full)) },
+          { label: 'Download…', run: () => download(tab, [full]) },
+          '-',
+          { label: 'Rename…', run: () => renameEntry(tab, e, full) },
+          { label: 'Permissions…', run: () => chmodEntry(tab, e, full) },
+          { label: 'Delete', run: () => deleteEntry(tab, e, full) },
+        ]);
       };
       tab.filesEl.appendChild(li);
     }
   } catch (err) {
-    tab.statusEl.textContent = String(err.message || err);
+    tab.msgEl.textContent = String(err.message || err);
   }
 }
 
+async function guarded(tab, label, fn) {
+  try {
+    await fn();
+  } catch (err) {
+    tab.msgEl.textContent = label + ' failed: ' + (err.message || err);
+  }
+}
+
+function newFolder(tab) {
+  if (!tab.sid) return;
+  return guarded(tab, 'New folder', async () => {
+    const name = await ask('New folder name');
+    if (!name) return;
+    if (name.includes('/')) throw new Error('Name cannot contain "/"');
+    await window.api.mkdir(tab.sid, joinPath(tab.cwd, name));
+    await browse(tab, tab.cwd);
+  });
+}
+
+function renameEntry(tab, e, full) {
+  return guarded(tab, 'Rename', async () => {
+    const name = await ask('Rename ' + e.name, e.name);
+    if (!name || name === e.name) return;
+    if (name.includes('/')) throw new Error('Name cannot contain "/"');
+    await window.api.rename(tab.sid, full, joinPath(tab.cwd, name));
+    if (tab.editing === full) closeEditor(tab, true);
+    await browse(tab, tab.cwd);
+  });
+}
+
+function chmodEntry(tab, e, full) {
+  return guarded(tab, 'Permissions', async () => {
+    const val = await ask('Permissions (octal) for ' + e.name, e.mode.toString(8).padStart(3, '0'));
+    if (!val) return;
+    if (!/^[0-7]{3,4}$/.test(val)) throw new Error('Use 3-4 octal digits, e.g. 644 or 755');
+    await window.api.chmod(tab.sid, full, parseInt(val, 8));
+    await browse(tab, tab.cwd);
+  });
+}
+
+function deleteEntry(tab, e, full) {
+  return guarded(tab, 'Delete', async () => {
+    const what = e.isDir ? `folder "${e.name}" and everything in it` : `"${e.name}"`;
+    if (!confirm(`Permanently delete ${what} from the server? This cannot be undone.`)) return;
+    await window.api.remove(tab.sid, full);
+    if (tab.editing && (tab.editing === full || tab.editing.startsWith(full + '/'))) closeEditor(tab, true);
+    await browse(tab, tab.cwd);
+  });
+}
+
+/* ---------- transfers ---------- */
+
+function transferDone(tab, verb, r) {
+  tab.progEl.hidden = true;
+  tab.msgEl.textContent = r ? `${verb} ${r.files} file${r.files === 1 ? '' : 's'} (${human(r.bytes)})` : 'Cancelled';
+}
+
+function upload(tab, paths) {
+  if (!tab.sid) return;
+  return guarded(tab, 'Upload', async () => {
+    tab.msgEl.textContent = 'Uploading...';
+    const r = await window.api.upload(tab.sid, tab.cwd, paths);
+    transferDone(tab, 'Uploaded', r);
+    if (r) await browse(tab, tab.cwd);
+  }).finally(() => { tab.progEl.hidden = true; });
+}
+
+function download(tab, remotes) {
+  return guarded(tab, 'Download', async () => {
+    const r = await window.api.download(tab.sid, remotes);
+    transferDone(tab, 'Downloaded', r);
+  }).finally(() => { tab.progEl.hidden = true; });
+}
+
+window.api.onProgress((id, p) => {
+  const tab = bySid.get(id);
+  if (!tab) return;
+  tab.progEl.hidden = false;
+  tab.progEl.value = p.total ? p.done / p.total : 1;
+  tab.msgEl.textContent = `${p.name}: ${human(p.done)} / ${human(p.total)}`;
+});
+
+/* ---------- editor (Monaco) ---------- */
+
+async function ensureEditor(tab) {
+  const monaco = await loadMonaco();
+  if (!tab.editor) {
+    tab.editor = monaco.editor.create(tab.monacoEl, { theme: 'vs-dark', automaticLayout: true, fontSize: 13, minimap: { enabled: false } });
+    tab.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => saveFile(tab));
+  }
+  return monaco;
+}
+
 async function openFile(tab, path) {
+  if (tab.editing === path) return;
   if (tab.editing && tab.editDirty && !confirm('Discard unsaved changes in ' + tab.editing + '?')) return;
   try {
-    tab.editArea.value = await window.api.readFile(tab.sid, path);
+    const text = await window.api.readFile(tab.sid, path);
+    const monaco = await ensureEditor(tab);
+    const old = tab.model;
+    tab.model = monaco.editor.createModel(text, undefined, monaco.Uri.from({ scheme: 'file', path }));
+    tab.editor.setModel(tab.model);
+    old?.dispose();
     tab.editing = path;
     tab.editDirty = false;
-    tab.editArea.oninput = () => { tab.editDirty = true; };
+    tab.model.onDidChangeContent(() => { tab.editDirty = true; tab.editPathEl.textContent = path + ' ●'; });
     tab.editPathEl.textContent = path;
     tab.editorEl.hidden = false;
     refit(tab);
+    tab.editor.focus();
   } catch (err) {
-    tab.statusEl.textContent = String(err.message || err);
+    tab.msgEl.textContent = String(err.message || err);
   }
 }
 
 async function saveFile(tab) {
   if (!tab.editing) return;
   try {
-    await window.api.writeFile(tab.sid, tab.editing, tab.editArea.value);
+    await window.api.writeFile(tab.sid, tab.editing, tab.model.getValue());
     tab.editDirty = false;
-    tab.statusEl.textContent = 'Saved ' + tab.editing;
+    tab.editPathEl.textContent = tab.editing;
+    tab.msgEl.textContent = 'Saved ' + tab.editing;
   } catch (err) {
-    tab.statusEl.textContent = 'Save failed: ' + (err.message || err);
+    tab.msgEl.textContent = 'Save failed: ' + (err.message || err);
   }
 }
 
-function closeEditor(tab) {
-  if (tab.editDirty && !confirm('Discard unsaved changes?')) return;
+function closeEditor(tab, force = false) {
+  if (!force && tab.editDirty && !confirm('Discard unsaved changes?')) return;
   tab.editorEl.hidden = true;
   tab.editing = null;
   tab.editDirty = false;
+  tab.editor?.setModel(null);
+  tab.model?.dispose();
+  tab.model = null;
   refit(tab);
 }
 
@@ -153,16 +362,16 @@ function closeEditor(tab) {
 
 async function connect(input, title) {
   const tab = createTab(title);
-  tab.statusEl.textContent = 'Connecting...';
+  tab.msgEl.textContent = 'Connecting...';
   try {
     const res = await window.api.connect(input, tab.term.cols, tab.term.rows);
     tab.sid = res.id;
     bySid.set(res.id, tab);
-    tab.statusEl.textContent = 'Connected';
+    tab.msgEl.textContent = 'Connected';
     refit(tab);
     browse(tab, res.home);
   } catch (err) {
-    tab.statusEl.textContent = 'Failed: ' + (err.message || err);
+    tab.msgEl.textContent = 'Failed: ' + (err.message || err);
     tab.term.write('\r\n\x1b[31mConnection failed:\x1b[0m ' + (err.message || err) + '\r\n');
   }
 }
@@ -171,7 +380,7 @@ window.api.onData((id, d) => bySid.get(id)?.term.write(d));
 window.api.onClosed((id) => {
   const tab = bySid.get(id);
   if (!tab) return;
-  tab.statusEl.textContent = 'Disconnected';
+  tab.msgEl.textContent = 'Disconnected';
   tab.sid = null;
   bySid.delete(id);
 });
