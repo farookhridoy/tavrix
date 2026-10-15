@@ -1,0 +1,40 @@
+# Server settings for Hostinger (LiteSpeed/Apache). This file is part of the generated site branch:
+# change it in site/.htaccess on main, not on the site branch.
+Options -Indexes
+DirectoryIndex index.html
+ErrorDocument 404 /404.html
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  # Never serve git metadata, hidden files (except /.well-known) or the branch note.
+  RewriteRule ^(\.git|README\.md$) - [F,L]
+  RewriteRule (^|/)\.(?!well-known/) - [F,L]
+  # Short links
+  RewriteRule ^manual/?$   https://github.com/farookhridoy/tavrix/blob/main/docs/MANUAL.md [R=302,L]
+  RewriteRule ^releases/?$ https://github.com/farookhridoy/tavrix/releases [R=302,L]
+  RewriteRule ^source/?$   https://github.com/farookhridoy/tavrix [R=302,L]
+  RewriteRule ^issues/?$   https://github.com/farookhridoy/tavrix/issues [R=302,L]
+  RewriteRule ^download/?$ /#download [NE,R=302,L]
+</IfModule>
+
+<IfModule mod_headers.c>
+  Header always set Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; upgrade-insecure-requests"
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "DENY"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+  # The page changes with every release: always revalidate it. Assets can be cached; images change rarely.
+  <FilesMatch "\.(html|json|xml|txt)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+  <FilesMatch "\.(css|js)$">
+    Header set Cache-Control "public, max-age=3600"
+  </FilesMatch>
+  <FilesMatch "\.(png|jpg|jpeg|ico)$">
+    Header set Cache-Control "public, max-age=86400"
+  </FilesMatch>
+</IfModule>
+
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css application/javascript text/javascript application/json image/svg+xml text/xml application/xml
+</IfModule>
