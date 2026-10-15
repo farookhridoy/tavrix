@@ -11,6 +11,7 @@
 </p>
 
 <p align="center">
+  <a href="https://tavrix.farookhridoy.com">Website</a> ·
   <a href="#download-and-install">Download</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#a-tour-of-tavrix">Tour</a> ·
@@ -227,6 +228,7 @@ scripts/         build helpers
 ## Roadmap and changelog
 
 - [CHANGELOG.md](CHANGELOG.md): what changed in each version
+- [docs/WEBSITE.md](docs/WEBSITE.md): how the website at tavrix.farookhridoy.com is built and deployed
 - [docs/ROADMAP.md](docs/ROADMAP.md): what is planned (other session types such as SFTP-only, FTP and Telnet; saved tunnels; a signed build)
 
 ## Contributing
