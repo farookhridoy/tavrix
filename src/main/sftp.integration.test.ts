@@ -163,3 +163,45 @@ function local0(): string {
   scratch ??= mkdtempSync(join(tmpdir(), 'tavrix-edit-'));
   return scratch;
 }
+
+test('fast paths return exactly the same data: parallel file reads and pipelined folder listings', { skip }, async () => {
+  const [host, port, username, privateKeyPath] = (target as string).split(':');
+  const s = new Session();
+  await s.connect({ host, port: Number(port), username, privateKeyPath }, async () => true);
+  const root = `${await s.realpath('.')}/tavrix-fast-${process.pid}`;
+  try {
+    await s.mkdir(root);
+
+    // file sizes around the 32 KB read-piece boundary, with multi-byte characters straddling pieces
+    for (const n of [0, 1, 32767, 32768, 32769, 65536, 100001]) {
+      const text = 'aé✓'.repeat(Math.ceil(n / 6)).slice(0, n);
+      await s.writeFile(`${root}/f${n}`, text);
+      const r = await s.openText(`${root}/f${n}`);
+      assert.equal(r.content, text, `size ${n}`);
+      assert.equal(r.stat.size, Buffer.byteLength(text), `stat size ${n}`);
+    }
+    await assert.rejects(s.openText(`${root}/missing`), /does not exist/);
+    await s.writeFile(`${root}/locked`, 'secret');
+    await s.chmod(`${root}/locked`, 0o000);
+    if (process.getuid?.() !== 0) await assert.rejects(s.openText(`${root}/locked`), /Permission denied|Failure/);
+    await s.chmod(`${root}/locked`, 0o644);
+
+    // a folder much bigger than one READDIR reply, compared with the library's own sequential reader
+    await s.mkdir(`${root}/many`);
+    const names = Array.from({ length: 1500 }, (_, i) => `file-${i}.txt`);
+    for (let i = 0; i < names.length; i += 100) await Promise.all(names.slice(i, i + 100).map((n) => s.createFile(`${root}/many/${n}`)));
+    await s.mkdir(`${root}/many/zz-sub`);
+    const fast = (await s.list(`${root}/many`)).map((e) => e.name);
+    const sftp = await (s as unknown as { sftp(): Promise<{ readdir(p: string, cb: (e: Error | undefined, l: { filename: string }[]) => void): void }> }).sftp();
+    const slow = await new Promise<string[]>((res, rej) => sftp.readdir(`${root}/many`, (e, l) => (e ? rej(e) : res(l.map((x) => x.filename)))));
+    assert.equal(fast.length, 1501);
+    assert.deepEqual([...fast].sort(), [...slow].sort(), 'same names, none missing, none repeated');
+    assert.equal(new Set(fast).size, fast.length);
+    assert.equal(fast[0], 'zz-sub', 'folders sort first');
+    assert.deepEqual(await s.list(`${root}/many/zz-sub`), [], 'an empty folder');
+    await assert.rejects(s.list(`${root}/nope`));
+  } finally {
+    await s.remove(root).catch(() => {});
+    s.close();
+  }
+});

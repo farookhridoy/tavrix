@@ -1,13 +1,13 @@
 # Tavrix
 
-An SSH workbench for macOS: terminal, remote file browser and editor in one window. v1.2.1.
+An SSH workbench for macOS: terminal, remote file browser and editor in one window. v1.3.0.
 
 ## Run
 ```bash
 npm install
 npm start
 ```
-Click + for a new connection (optionally through a jump host) (password, or private key path), or pick a saved session. Double-click folders to browse, double-click a file to edit it (Cmd+S saves), right-click for download/rename/permissions/delete, and drag files onto the file panel to upload.
+Click + for a new connection (optionally through a jump host) (password, or private key path), or pick a saved session. Click a folder to open it, double-click a file to edit it (Cmd+S saves), right-click for download/rename/permissions/delete, and drag files onto the file panel to upload.
 
 ## Also
 - **Split** the terminal (status bar), **Tunnels** for -L/-R/-D forwarding, **Snippets** in the sidebar.

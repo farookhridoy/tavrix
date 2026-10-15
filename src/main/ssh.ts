@@ -51,6 +51,14 @@ export interface FileStat {
 
 export type SaveResult = { conflict: false; stat: FileStat | null } | { conflict: true; stat: FileStat | null };
 
+/** SFTP status code for end-of-directory. */
+const EOF_CODE = 1;
+/** How many directory-read requests to keep outstanding. */
+const READDIR_WINDOW = 16;
+
+/** Size of one parallel read request. */
+const READ_PIECE = 32 * 1024;
+
 /** Largest file the editor will open; bigger files are for download. */
 export const MAX_EDIT_BYTES = 5 * 1024 * 1024;
 
@@ -206,24 +214,58 @@ export class Session {
   }
 
   async list(path: string): Promise<RemoteEntry[]> {
+    const items = await this.readDirPipelined(path);
+    return items
+      .map((i) => ({
+        name: i.filename,
+        isDir: i.attrs.isDirectory(),
+        isLink: i.attrs.isSymbolicLink(),
+        size: i.attrs.size,
+        mtime: i.attrs.mtime,
+        mode: i.attrs.mode & 0o7777,
+      }))
+      .sort((a, b) => Number(b.isDir) - Number(a.isDir) || a.name.localeCompare(b.name));
+  }
+
+  /**
+   * Read a directory with several READDIR requests in flight at once. The server hands out successive batches
+   * in the order it receives the requests, so batch i is the i-th reply; reading one batch per round trip made
+   * big folders cost dozens of round trips on a slow link.
+   */
+  private async readDirPipelined(path: string): Promise<FileEntryWithStats[]> {
     const s = await this.sftp();
-    return new Promise((resolve, reject) => {
-      s.readdir(path, (err, items: FileEntryWithStats[]) => {
-        if (err) return reject(err);
-        resolve(
-          items
-            .map((i) => ({
-              name: i.filename,
-              isDir: i.attrs.isDirectory(),
-              isLink: i.attrs.isSymbolicLink(),
-              size: i.attrs.size,
-              mtime: i.attrs.mtime,
-              mode: i.attrs.mode & 0o7777,
-            }))
-            .sort((a, b) => Number(b.isDir) - Number(a.isDir) || a.name.localeCompare(b.name)),
-        );
+    const handle = await this.call<Buffer>((sf, cb) => sf.opendir(path, cb));
+    const batches: FileEntryWithStats[][] = [];
+    let issued = 0;
+    let inFlight = 0;
+    let finished = false;
+    let failure: Error | undefined;
+    try {
+      await new Promise<void>((resolve) => {
+        const pump = (): void => {
+          while (!finished && inFlight < READDIR_WINDOW) {
+            const index = issued++;
+            inFlight++;
+            s.readdir(handle, (err, list) => {
+              inFlight--;
+              if (err) {
+                finished = true; // EOF or a real error: stop asking for more
+                if ((err as { code?: number }).code !== EOF_CODE) failure ??= err;
+              } else if (list) {
+                batches[index] = list;
+              }
+              if (inFlight === 0 && finished) resolve();
+              else pump();
+            });
+          }
+        };
+        pump();
       });
-    });
+    } finally {
+      s.close(handle, () => {}); // nothing depends on the close, so do not wait a round trip for it
+    }
+    if (failure) throw failure;
+    return batches.flat();
   }
 
 
@@ -390,27 +432,55 @@ export class Session {
     await this.call<void>((s, cb) => s.close(handle, (e) => cb(e)));
   }
 
-  /** Read a text file for editing. Refuses files that would not survive a text round trip. */
-  async readFile(path: string): Promise<string> {
-    const st = await this.stat(path);
-    if (!st) throw new Error(`${path} does not exist`);
-    if (st.size > MAX_EDIT_BYTES) {
-      throw new Error(`This file is ${(st.size / 1048576).toFixed(1)} MB, too large to edit here (limit ${MAX_EDIT_BYTES / 1048576} MB). Download it instead.`);
-    }
+  /**
+   * Read a text file for editing, with the stat it was read under. Refuses files that would not survive a text
+   * round trip. The stat and the open go out together and the data is read in parallel 32 KB pieces, so a file
+   * costs about two round trips however large it is. If the file changes while it is read, the saved stat no
+   * longer matches and the next save is treated as a conflict.
+   */
+  async openText(path: string): Promise<{ content: string; stat: FileStat }> {
     const s = await this.sftp();
-    const buf = await new Promise<Buffer>((resolve, reject) => {
-      const chunks: Buffer[] = [];
-      s.createReadStream(path)
-        .on('data', (c: Buffer) => chunks.push(c))
-        .on('error', reject)
-        .on('end', () => resolve(Buffer.concat(chunks)));
-    });
-    if (buf.includes(0)) throw new Error('This looks like a binary file; saving it as text would corrupt it. Download it instead.');
+    const [stat, opened] = await Promise.all([
+      this.stat(path),
+      this.call<Buffer>((sf, cb) => sf.open(path, 'r', cb)).then((h) => ({ h }), (error: Error) => ({ error })),
+    ]);
+    const handle = 'h' in opened ? opened.h : undefined;
+    const closeHandle = (): void => {
+      if (handle) s.close(handle, () => {}); // nothing depends on the close, so do not wait for it
+    };
     try {
-      return new TextDecoder('utf-8', { fatal: true }).decode(buf);
-    } catch {
-      throw new Error('This file is not valid UTF-8 text; saving it would corrupt it. Download it instead.');
+      if (!stat) throw new Error(`${path} does not exist`);
+      if ('error' in opened) throw opened.error;
+      if (stat.size > MAX_EDIT_BYTES) {
+        throw new Error(`This file is ${(stat.size / 1048576).toFixed(1)} MB, too large to edit here (limit ${MAX_EDIT_BYTES / 1048576} MB). Download it instead.`);
+      }
+      const buf = Buffer.alloc(stat.size);
+      const readPiece = async (offset: number): Promise<number> => {
+        const end = Math.min(offset + READ_PIECE, stat.size);
+        let at = offset;
+        while (at < end) {
+          const n = await this.call<number>((sf, cb) => sf.read(opened.h, buf, at, end - at, at, (e, bytes) => cb(e, bytes)));
+          if (!n) break; // the file got shorter than its stat said
+          at += n;
+        }
+        return at;
+      };
+      const reads: Promise<number>[] = [];
+      for (let offset = 0; offset < stat.size; offset += READ_PIECE) reads.push(readPiece(offset));
+      await Promise.all(reads);
+      if (buf.includes(0)) throw new Error('This looks like a binary file; saving it as text would corrupt it. Download it instead.');
+      try {
+        return { content: new TextDecoder('utf-8', { fatal: true }).decode(buf), stat };
+      } catch {
+        throw new Error('This file is not valid UTF-8 text; saving it would corrupt it. Download it instead.');
+      }
+    } finally {
+      closeHandle();
     }
+  }
+
+  async readFile(path: string): Promise<string> {
+    return (await this.openText(path)).content;
   }
 
   async writeFile(path: string, content: string): Promise<void> {

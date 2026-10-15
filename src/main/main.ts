@@ -257,12 +257,8 @@ function registerIpc(): void {
   ipcMain.on('ssh:resize', (_e, id: string, shellId: string, cols: number, rows: number) => sessions.get(id)?.resize(shellId, cols, rows));
   ipcMain.on('ssh:close-shell', (_e, id: string, shellId: string) => sessions.get(id)?.closeShell(shellId));
   ipcMain.handle('sftp:list', (_e, id: string, path: string) => get(id).list(path));
-  // Opening records the file's stat first, so a later change is never mistaken for "unchanged".
-  ipcMain.handle('sftp:open', async (_e, id: string, path: string) => {
-    const session = get(id);
-    const stat = await session.stat(path);
-    return { content: await session.readFile(path), stat };
-  });
+  // The stat is taken before the bytes are read, so a later change is never mistaken for "unchanged".
+  ipcMain.handle('sftp:open', (_e, id: string, path: string) => get(id).openText(path));
   ipcMain.handle('sftp:stat', (_e, id: string, path: string) => get(id).stat(path));
   ipcMain.handle('sftp:create', (_e, id: string, path: string) => get(id).createFile(path));
   ipcMain.handle(

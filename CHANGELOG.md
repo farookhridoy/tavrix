@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.0
+- **Faster file panel over a network.** Measured on a simulated slow link: a 3,000-file folder 1.49 s -> 0.18 s at 40 ms round-trip latency and 4.2 s -> 0.5 s at 120 ms. Folder listings now keep several directory requests in flight instead of one per round trip.
+- Opening a file takes about 2 round trips regardless of size (the size check and the open are sent together and the data is read in parallel pieces).
+- Folders you have already visited show instantly from memory and refresh in the background; the new list replaces them only if something changed. Changes made in the app (new folder, rename, delete, upload) always show immediately.
+- A slow reply for a folder you already left can no longer replace the one you are in.
+- **Folders open with one click** (files: click selects, double-click edits).
+- The path updates immediately when you click, and the list dims if the server is slow.
+- Fix: Reload and the editor no longer read the file's size twice.
+
 ## 1.2.1
 - Much smaller download: installers are now per CPU instead of one universal build. Apple Silicon **86 MB** (was 224 MB), Intel **94 MB**. Installed size drops from 521 MB to about 255 MB.
   - Separate `arm64` and `x64` disk images (the universal build carried two copies of the browser engine).

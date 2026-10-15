@@ -86,7 +86,7 @@ function loadMonaco() {
 /* ---------- tabs ---------- */
 
 function createTab(title) {
-  const tab = { title, sid: null, cwd: '/', editing: null };
+  const tab = { title, sid: null, cwd: '/', editing: null, browseSeq: 0, dirCache: new Map(), selectedEl: null };
 
   tab.header = el('div', 'tab');
   const label = el('span', '', title);
@@ -100,7 +100,7 @@ function createTab(title) {
   const tools = el('div', 'ftools');
   const mkBtn = (label, title, fn) => { const b = el('button', '', label); b.title = title; b.onclick = fn; tools.appendChild(b); };
   mkBtn('↑', 'Parent folder', () => tab.sid && browse(tab, parentPath(tab.cwd)));
-  mkBtn('⟳', 'Refresh', () => tab.sid && browse(tab, tab.cwd));
+  mkBtn('⟳', 'Refresh', () => tab.sid && browse(tab, tab.cwd, { fresh: true }));
   mkBtn('+ File', 'New empty file', () => newFile(tab));
   mkBtn('+ Folder', 'New folder', () => newFolder(tab));
   mkBtn('Upload', 'Upload files or folders', () => upload(tab));
@@ -122,7 +122,7 @@ function createTab(title) {
       { label: 'New file', run: () => newFile(tab) },
       { label: 'New folder', run: () => newFolder(tab) },
       { label: 'Upload here…', run: () => upload(tab) },
-      { label: 'Refresh', run: () => browse(tab, tab.cwd) },
+      { label: 'Refresh', run: () => browse(tab, tab.cwd, { fresh: true }) },
     ]);
   });
   const work = el('div', 'work');
@@ -269,42 +269,81 @@ function closeTab(tab) {
 
 /* ---------- files ---------- */
 
-async function browse(tab, path) {
+const DIR_CACHE_MAX = 60;
+const dirSignature = (items) => items.map((e) => `${e.name}|${e.isDir ? 'd' : e.isLink ? 'l' : 'f'}|${e.size}|${e.mtime}|${e.mode}`).join('\n');
+
+function rememberDir(tab, path, items) {
+  tab.dirCache.delete(path); // re-insert so the Map's order is least-recently-used first
+  tab.dirCache.set(path, { items, sig: dirSignature(items) });
+  if (tab.dirCache.size > DIR_CACHE_MAX) tab.dirCache.delete(tab.dirCache.keys().next().value);
+  return tab.dirCache.get(path).sig;
+}
+
+function renderDir(tab, path, items) {
+  tab.cwd = path;
+  tab.cwdEl.textContent = path;
+  tab.selectedEl = null;
+  const frag = document.createDocumentFragment();
+  if (path !== '/') {
+    const up = el('li', '', '📁 ..');
+    up.onclick = () => browse(tab, parentPath(path));
+    frag.appendChild(up);
+  }
+  const select = (li) => {
+    tab.selectedEl?.classList.remove('sel');
+    tab.selectedEl = li;
+    li.classList.add('sel');
+  };
+  for (const e of items) {
+    const li = el('li');
+    li.append(el('span', '', (e.isDir ? '📁 ' : e.isLink ? '🔗 ' : '📄 ') + e.name), el('small', '', e.isDir ? '' : human(e.size)));
+    const full = joinPath(path, e.name);
+    // A folder opens on one click; a file is selected on click and opened in the editor on double-click.
+    li.onclick = () => (e.isDir ? browse(tab, full) : select(li));
+    if (!e.isDir) li.ondblclick = () => openFile(tab, full);
+    li.oncontextmenu = (ev) => {
+      ev.preventDefault();
+      select(li);
+      showMenu(ev.clientX, ev.clientY, [
+        { label: e.isDir ? 'Open folder' : 'Edit', run: () => (e.isDir ? browse(tab, full) : openFile(tab, full)) },
+        { label: 'Download…', run: () => download(tab, [full]) },
+        '-',
+        { label: 'Rename…', run: () => renameEntry(tab, e, full) },
+        { label: 'Permissions…', run: () => chmodEntry(tab, e, full) },
+        { label: 'Delete', run: () => deleteEntry(tab, e, full) },
+      ]);
+    };
+    frag.appendChild(li);
+  }
+  tab.filesEl.replaceChildren(frag);
+}
+
+/**
+ * Open a folder. A folder seen before is shown immediately from memory and refreshed in the background; otherwise the
+ * path updates at once and the list dims if the server is slow. Only the newest navigation may touch the screen, so a
+ * slow reply for a folder you already left cannot overwrite the one you are in. `fresh` skips the remembered list
+ * (used after changes made by this app).
+ */
+async function browse(tab, path, { fresh = false } = {}) {
+  if (!tab.sid) return;
+  const seq = ++tab.browseSeq;
+  const cached = fresh ? undefined : tab.dirCache.get(path);
+  if (cached) renderDir(tab, path, cached.items);
+  else tab.cwdEl.textContent = path + '  …';
+  const dimTimer = cached ? null : setTimeout(() => { if (seq === tab.browseSeq) tab.filesEl.classList.add('loading'); }, 120);
   try {
     const items = await window.api.list(tab.sid, path);
-    tab.cwd = path;
-    tab.cwdEl.textContent = path;
-    tab.filesEl.textContent = '';
-    if (path !== '/') {
-      const up = el('li', '', '📁 ..');
-      up.onclick = () => browse(tab, parentPath(path));
-      tab.filesEl.appendChild(up);
-    }
-    for (const e of items) {
-      const li = el('li');
-      li.append(el('span', '', (e.isDir ? '📁 ' : e.isLink ? '🔗 ' : '📄 ') + e.name), el('small', '', e.isDir ? '' : human(e.size)));
-      const full = joinPath(path, e.name);
-      li.onclick = () => {
-        for (const x of tab.filesEl.children) x.classList.remove('sel');
-        li.classList.add('sel');
-      };
-      li.ondblclick = () => (e.isDir ? browse(tab, full) : openFile(tab, full));
-      li.oncontextmenu = (ev) => {
-        ev.preventDefault();
-        li.onclick();
-        showMenu(ev.clientX, ev.clientY, [
-          { label: e.isDir ? 'Open folder' : 'Edit', run: () => (e.isDir ? browse(tab, full) : openFile(tab, full)) },
-          { label: 'Download…', run: () => download(tab, [full]) },
-          '-',
-          { label: 'Rename…', run: () => renameEntry(tab, e, full) },
-          { label: 'Permissions…', run: () => chmodEntry(tab, e, full) },
-          { label: 'Delete', run: () => deleteEntry(tab, e, full) },
-        ]);
-      };
-      tab.filesEl.appendChild(li);
-    }
+    if (seq !== tab.browseSeq) return;
+    const sig = rememberDir(tab, path, items);
+    if (!cached || cached.sig !== sig) renderDir(tab, path, items);
+    else tab.cwdEl.textContent = path;
   } catch (err) {
-    tab.msgEl.textContent = String(err.message || err);
+    if (seq !== tab.browseSeq) return;
+    tab.cwdEl.textContent = tab.cwd;
+    tab.msgEl.textContent = String(err.message || err).replace(/^Error invoking remote method '[^']*': (Error: )?/, '');
+  } finally {
+    clearTimeout(dimTimer);
+    if (seq === tab.browseSeq) tab.filesEl.classList.remove('loading');
   }
 }
 
@@ -323,7 +362,7 @@ function newFolder(tab) {
     if (!name) return;
     if (name.includes('/')) throw new Error('Name cannot contain "/"');
     await window.api.mkdir(tab.sid, joinPath(tab.cwd, name));
-    await browse(tab, tab.cwd);
+    await browse(tab, tab.cwd, { fresh: true });
   });
 }
 
@@ -334,7 +373,7 @@ function renameEntry(tab, e, full) {
     if (name.includes('/')) throw new Error('Name cannot contain "/"');
     await window.api.rename(tab.sid, full, joinPath(tab.cwd, name));
     if (tab.editing === full) closeEditor(tab, true);
-    await browse(tab, tab.cwd);
+    await browse(tab, tab.cwd, { fresh: true });
   });
 }
 
@@ -344,7 +383,7 @@ function chmodEntry(tab, e, full) {
     if (!val) return;
     if (!/^[0-7]{3,4}$/.test(val)) throw new Error('Use 3-4 octal digits, e.g. 644 or 755');
     await window.api.chmod(tab.sid, full, parseInt(val, 8));
-    await browse(tab, tab.cwd);
+    await browse(tab, tab.cwd, { fresh: true });
   });
 }
 
@@ -354,7 +393,7 @@ function deleteEntry(tab, e, full) {
     if (!confirm(`Permanently delete ${what} from the server? This cannot be undone.`)) return;
     await window.api.remove(tab.sid, full);
     if (tab.editing && (tab.editing === full || tab.editing.startsWith(full + '/'))) closeEditor(tab, true);
-    await browse(tab, tab.cwd);
+    await browse(tab, tab.cwd, { fresh: true });
   });
 }
 
@@ -384,7 +423,7 @@ function upload(tab, paths) {
     transferStart(tab, 'Uploading...');
     const r = await window.api.upload(tab.sid, tab.cwd, paths);
     transferDone(tab, 'Uploaded', r);
-    if (r) await browse(tab, tab.cwd);
+    if (r) await browse(tab, tab.cwd, { fresh: true });
   }).finally(() => transferEnd(tab));
 }
 
@@ -432,7 +471,7 @@ function newFile(tab) {
     if (name.includes('/')) throw new Error('Name cannot contain "/"');
     const full = joinPath(tab.cwd, name);
     await window.api.createFile(tab.sid, full); // fails if it already exists
-    await browse(tab, tab.cwd);
+    await browse(tab, tab.cwd, { fresh: true });
     await openFile(tab, full);
   });
 }
