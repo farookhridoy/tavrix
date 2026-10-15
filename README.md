@@ -1,6 +1,6 @@
 # Tavrix
 
-An SSH workbench for macOS: terminal, remote file browser and editor in one window. Early development (v0.4.0).
+An SSH workbench for macOS: terminal, remote file browser and editor in one window. Early development (v0.5.0).
 
 ## Run
 ```bash

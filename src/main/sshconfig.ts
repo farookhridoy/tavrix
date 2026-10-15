@@ -7,7 +7,7 @@ export interface ConfigHost {
 }
 
 /** Parse the concrete (non-wildcard) Host blocks of an OpenSSH client config. */
-export function parseSshConfig(text: string, home: string): ConfigHost[] {
+export function parseSshConfig(text: string, home: string, defaultUser = ''): ConfigHost[] {
   const out: ConfigHost[] = [];
   let aliases: string[] = [];
   let current: Partial<ConfigHost> = {};
@@ -18,7 +18,7 @@ export function parseSshConfig(text: string, home: string): ConfigHost[] {
         alias,
         host: current.host ?? alias,
         port: current.port ?? 22,
-        username: current.username ?? '',
+        username: current.username ?? defaultUser,
         privateKeyPath: current.privateKeyPath,
       });
     }
