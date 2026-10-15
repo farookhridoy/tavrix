@@ -1,9 +1,26 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import { join } from 'node:path';
+import { homedir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { Session, ConnectRequest } from './ssh';
+import { parseSshConfig } from './sshconfig';
+import {
+  Profile,
+  listProfiles,
+  getProfile,
+  saveProfile,
+  deleteProfile,
+  readSecret,
+  knownFingerprint,
+  trustHost,
+} from './store';
 
 const sessions = new Map<string, Session>();
+
+interface ConnectInput extends Partial<ConnectRequest> {
+  profileId?: string;
+}
 
 function get(id: string): Session {
   const s = sessions.get(id);
@@ -11,10 +28,69 @@ function get(id: string): Session {
   return s;
 }
 
+function toBase64(hex: string): string {
+  return 'SHA256:' + Buffer.from(hex, 'hex').toString('base64').replace(/=+$/, '');
+}
+
+function resolveRequest(input: ConnectInput): ConnectRequest {
+  if (input.profileId) {
+    const p = getProfile(input.profileId);
+    if (!p) throw new Error('Saved session not found');
+    const secret = readSecret(p);
+    return {
+      host: p.host,
+      port: p.port,
+      username: p.username,
+      privateKeyPath: p.privateKeyPath,
+      password: p.privateKeyPath ? undefined : secret,
+      passphrase: p.privateKeyPath ? secret : undefined,
+    };
+  }
+  const { host, port, username, password, privateKeyPath } = input;
+  if (!host || !username) throw new Error('Host and username are required');
+  return {
+    host,
+    port: port || 22,
+    username,
+    privateKeyPath: privateKeyPath || undefined,
+    password: privateKeyPath ? undefined : password,
+    passphrase: privateKeyPath ? password : undefined,
+  };
+}
+
+function hostVerifier(win: BrowserWindow | null, host: string, port: number) {
+  return async (hex: string): Promise<boolean> => {
+    const fp = toBase64(hex);
+    const known = knownFingerprint(host, port);
+    if (known === fp) return true;
+    const opts = win ? [win] : [];
+    if (known) {
+      await dialog.showMessageBox(...(opts as [BrowserWindow]), {
+        type: 'error',
+        message: `Host key for ${host}:${port} has CHANGED`,
+        detail: `Saved: ${known}\nPresented: ${fp}\n\nThe connection was blocked. This could be a man-in-the-middle attack. If the server was reinstalled, remove its entry from known_hosts.json in the app data folder.`,
+        buttons: ['OK'],
+      });
+      return false;
+    }
+    const r = await dialog.showMessageBox(...(opts as [BrowserWindow]), {
+      type: 'question',
+      message: `Trust new host ${host}:${port}?`,
+      detail: `Fingerprint:\n${fp}`,
+      buttons: ['Trust and connect', 'Cancel'],
+      defaultId: 1,
+      cancelId: 1,
+    });
+    if (r.response !== 0) return false;
+    trustHost(host, port, fp);
+    return true;
+  };
+}
+
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
-    width: 1280,
-    height: 800,
+    width: 1360,
+    height: 840,
     titleBarStyle: 'hiddenInset',
     webPreferences: {
       preload: join(__dirname, 'preload.js'),
@@ -27,11 +103,18 @@ function createWindow(): BrowserWindow {
   return win;
 }
 
+function publicProfile(p: Profile) {
+  const { secret, ...rest } = p;
+  return { ...rest, hasSecret: Boolean(secret) };
+}
+
 function registerIpc(): void {
-  ipcMain.handle('ssh:connect', async (e, req: ConnectRequest, cols: number, rows: number) => {
+  ipcMain.handle('ssh:connect', async (e, input: ConnectInput, cols: number, rows: number) => {
+    const req = resolveRequest(input);
     const id = randomUUID();
     const session = new Session();
-    await session.connect(req);
+    const win = BrowserWindow.fromWebContents(e.sender);
+    await session.connect(req, hostVerifier(win, req.host, req.port));
     await session.openShell(
       cols,
       rows,
@@ -42,17 +125,56 @@ function registerIpc(): void {
       },
     );
     sessions.set(id, session);
-    const home = await session.realpath('.');
-    return { id, home };
+    return { id, home: await session.realpath('.') };
   });
-  ipcMain.on('ssh:write', (_e, id: string, data: string) => get(id).write(data));
-  ipcMain.on('ssh:resize', (_e, id: string, cols: number, rows: number) => get(id).resize(cols, rows));
+  ipcMain.on('ssh:write', (_e, id: string, data: string) => sessions.get(id)?.write(data));
+  ipcMain.on('ssh:resize', (_e, id: string, cols: number, rows: number) => sessions.get(id)?.resize(cols, rows));
   ipcMain.handle('sftp:list', (_e, id: string, path: string) => get(id).list(path));
   ipcMain.handle('sftp:read', (_e, id: string, path: string) => get(id).readFile(path));
   ipcMain.handle('sftp:write', (_e, id: string, path: string, content: string) => get(id).writeFile(path, content));
   ipcMain.handle('ssh:disconnect', (_e, id: string) => {
     sessions.get(id)?.close();
     sessions.delete(id);
+  });
+
+  ipcMain.handle('profiles:list', () => listProfiles().map(publicProfile));
+  ipcMain.handle(
+    'profiles:save',
+    (_e, p: Omit<Profile, 'id' | 'secret'> & { id?: string }, secret?: string) => {
+      const profile: Profile = { ...p, id: p.id ?? randomUUID() };
+      saveProfile(profile, secret || undefined);
+      return profile.id;
+    },
+  );
+  ipcMain.handle('profiles:delete', (_e, id: string) => deleteProfile(id));
+  ipcMain.handle('profiles:import-ssh-config', () => {
+    let text: string;
+    try {
+      text = readFileSync(join(homedir(), '.ssh', 'config'), 'utf8');
+    } catch {
+      return { added: 0, skipped: 0 };
+    }
+    const existing = new Set(listProfiles().map((p) => `${p.username}@${p.host}:${p.port}`));
+    let added = 0;
+    let skipped = 0;
+    for (const h of parseSshConfig(text, homedir())) {
+      const key = `${h.username}@${h.host}:${h.port}`;
+      if (existing.has(key)) {
+        skipped++;
+        continue;
+      }
+      saveProfile({
+        id: randomUUID(),
+        name: h.alias,
+        host: h.host,
+        port: h.port,
+        username: h.username,
+        privateKeyPath: h.privateKeyPath,
+      });
+      existing.add(key);
+      added++;
+    }
+    return { added, skipped };
   });
 }
 

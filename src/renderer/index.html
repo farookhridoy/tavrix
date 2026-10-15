@@ -8,28 +8,36 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <form id="connect">
-    <input id="host" placeholder="host" required />
-    <input id="port" type="number" value="22" />
-    <input id="user" placeholder="username" required />
-    <input id="pass" type="password" placeholder="password (or key path below)" />
-    <input id="key" placeholder="private key path (optional)" />
-    <button>Connect</button>
-    <span id="status"></span>
-  </form>
-  <main>
-    <aside>
-      <div id="cwd"></div>
-      <ul id="files"></ul>
-    </aside>
-    <section id="work">
-      <div id="term"></div>
-      <div id="editor" hidden>
-        <div id="editbar"><span id="editpath"></span><button id="save">Save</button><button id="closeedit">Close</button></div>
-        <textarea id="editarea" spellcheck="false"></textarea>
+  <div id="titlebar"></div>
+  <div id="app">
+    <aside id="sessions">
+      <div class="head">
+        <strong>Sessions</strong>
+        <span><button id="new" title="New connection">+</button><button id="import" title="Import ~/.ssh/config">Import</button></span>
       </div>
-    </section>
-  </main>
+      <ul id="sessionList"></ul>
+      <div id="notice"></div>
+    </aside>
+    <div id="content">
+      <div id="tabbar"></div>
+      <div id="panes"></div>
+    </div>
+  </div>
+
+  <dialog id="dlg">
+    <form id="form">
+      <h3 id="dlgTitle">New connection</h3>
+      <input id="f-name" placeholder="Name (optional)" />
+      <input id="f-host" placeholder="Host" required />
+      <input id="f-port" type="number" value="22" />
+      <input id="f-user" placeholder="Username" required />
+      <input id="f-pass" type="password" placeholder="Password (or key passphrase)" />
+      <input id="f-key" placeholder="Private key path (optional)" />
+      <label><input id="f-save" type="checkbox" checked /> Save this session (secret stored encrypted with macOS Keychain)</label>
+      <div class="row"><button type="button" id="f-cancel">Cancel</button><button id="f-go">Connect</button></div>
+    </form>
+  </dialog>
+
   <script src="../../node_modules/@xterm/xterm/lib/xterm.js"></script>
   <script src="../../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
   <script src="renderer.js"></script>

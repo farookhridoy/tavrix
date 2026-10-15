@@ -1,18 +1,46 @@
 * { box-sizing: border-box; }
 body { margin: 0; height: 100vh; display: flex; flex-direction: column; font: 13px -apple-system, sans-serif; background: #1e1e1e; color: #ddd; }
-#connect { display: flex; gap: 6px; padding: 8px 8px 8px 80px; -webkit-app-region: drag; background: #2a2a2a; }
-#connect input, #connect button { -webkit-app-region: no-drag; background: #1e1e1e; color: #ddd; border: 1px solid #444; padding: 4px 6px; border-radius: 4px; }
-#connect #port { width: 64px; }
-main { flex: 1; display: flex; min-height: 0; }
-aside { width: 260px; border-right: 1px solid #333; display: flex; flex-direction: column; }
-#cwd { padding: 6px 8px; background: #252525; word-break: break-all; }
-#files { list-style: none; margin: 0; padding: 0; overflow: auto; flex: 1; }
-#files li { padding: 3px 10px; cursor: pointer; white-space: nowrap; }
-#files li:hover { background: #333; }
-#work { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-#term { flex: 1; padding: 4px; min-height: 0; }
-#editor { flex: 1; display: flex; flex-direction: column; border-top: 1px solid #333; }
-#editor[hidden] { display: none; }
-#editbar { display: flex; gap: 8px; align-items: center; padding: 4px 8px; background: #252525; }
-#editpath { flex: 1; }
-#editarea { flex: 1; background: #1e1e1e; color: #ddd; border: 0; padding: 8px; font: 12px Menlo, monospace; resize: none; outline: none; }
+button, input { font: inherit; }
+button { background: #333; color: #ddd; border: 1px solid #484848; border-radius: 4px; padding: 3px 8px; cursor: pointer; }
+button:hover { background: #3d3d3d; }
+input[type=text], input:not([type]), input[type=password], input[type=number] { background: #1e1e1e; color: #ddd; border: 1px solid #444; padding: 5px 7px; border-radius: 4px; }
+#titlebar { height: 28px; -webkit-app-region: drag; background: #262626; flex: none; }
+#app { flex: 1; display: flex; min-height: 0; }
+#sessions { width: 220px; border-right: 1px solid #333; display: flex; flex-direction: column; background: #232323; }
+#sessions .head { display: flex; justify-content: space-between; align-items: center; padding: 8px; }
+#sessions .head span { display: flex; gap: 4px; }
+#sessionList { list-style: none; margin: 0; padding: 0; overflow: auto; flex: 1; }
+#sessionList li { padding: 5px 10px; cursor: pointer; display: flex; justify-content: space-between; gap: 6px; }
+#sessionList li:hover { background: #333; }
+#sessionList li small { color: #888; display: block; }
+#sessionList li .x { visibility: hidden; padding: 0 5px; }
+#sessionList li:hover .x { visibility: visible; }
+#notice { padding: 6px 8px; color: #9c9; min-height: 24px; }
+#content { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+#tabbar { display: flex; background: #262626; border-bottom: 1px solid #333; overflow-x: auto; }
+.tab { padding: 6px 12px; cursor: pointer; border-right: 1px solid #333; white-space: nowrap; display: flex; gap: 8px; align-items: center; }
+.tab.active { background: #1e1e1e; }
+.tab .close { color: #888; }
+.tab .close:hover { color: #fff; }
+#panes { flex: 1; position: relative; min-height: 0; }
+.pane { position: absolute; inset: 0; display: none; }
+.pane.active { display: flex; }
+.pane aside { width: 260px; border-right: 1px solid #333; display: flex; flex-direction: column; }
+.cwd { padding: 6px 8px; background: #252525; word-break: break-all; }
+.files { list-style: none; margin: 0; padding: 0; overflow: auto; flex: 1; }
+.files li { padding: 3px 10px; cursor: pointer; white-space: nowrap; }
+.files li:hover { background: #333; }
+.work { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.term { flex: 1; padding: 4px; min-height: 0; }
+.editor { flex: 1; display: flex; flex-direction: column; border-top: 1px solid #333; }
+.editor[hidden] { display: none; }
+.editbar { display: flex; gap: 8px; align-items: center; padding: 4px 8px; background: #252525; }
+.editpath { flex: 1; }
+.editarea { flex: 1; background: #1e1e1e; color: #ddd; border: 0; padding: 8px; font: 12px Menlo, monospace; resize: none; outline: none; }
+.status { padding: 3px 8px; background: #252525; color: #aaa; min-height: 22px; }
+dialog { background: #2a2a2a; color: #ddd; border: 1px solid #555; border-radius: 8px; padding: 16px; width: 380px; }
+dialog::backdrop { background: rgba(0,0,0,.5); }
+dialog form { display: flex; flex-direction: column; gap: 8px; }
+dialog h3 { margin: 0 0 4px; }
+dialog label { color: #aaa; font-size: 12px; }
+dialog .row { display: flex; justify-content: flex-end; gap: 8px; }
