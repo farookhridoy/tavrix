@@ -21,7 +21,11 @@ Tavrix tells you when a newer version is published (it checks at launch, every 1
 
 **Privacy:** the only network request Tavrix makes on its own is that check: an anonymous `GET https://api.github.com/repos/farookhridoy/tavrix/releases/latest` (it sends the app version in the User-Agent, and GitHub sees your IP address). Everything else goes only to the servers you connect to.
 
-**Installing:** download the `.dmg` for your Mac from [Releases](https://github.com/farookhridoy/tavrix/releases/latest) (`arm64` for Apple Silicon M1 and later, `x64` for Intel; Apple menu > About This Mac shows which), then drag Tavrix to Applications. The app is not signed or notarized, so on first launch macOS blocks it: right-click Tavrix > **Open** > **Open**, or run `xattr -dr com.apple.quarantine /Applications/Tavrix.app`. Verify the download against the SHA-256 in the release notes (`shasum -a 256 file.dmg`).
+**Installing:** download the `.dmg` for your Mac from [Releases](https://github.com/farookhridoy/tavrix/releases/latest) (`arm64` for Apple Silicon M1 and later, `x64` for Intel; Apple menu > About This Mac shows which), then drag Tavrix to Applications. The app is not signed or notarized by an Apple developer, so macOS blocks a downloaded copy the first time ("Apple could not verify "Tavrix" is free of malware…"). **Click Done (not Move to Trash).** Then either:
+- open **System Settings > Privacy & Security**, scroll to **Security**, and click **Open Anyway** next to Tavrix (it asks for your password); on older macOS, right-click Tavrix > **Open** > **Open** also works; or
+- in Terminal, run `xattr -dr com.apple.quarantine /Applications/Tavrix.app` and open it normally.
+
+You only need to do this once per downloaded copy. Verify the download against the SHA-256 in the release notes (`shasum -a 256 file.dmg`).
 
 ## Build an installer
 ```bash
