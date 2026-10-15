@@ -66,6 +66,7 @@
         <a class="btn" href="https://github.com/farookhridoy/tavrix/releases/download/v1.7.0/Tavrix-1.7.0-x64.dmg" data-download="x64">Intel Mac</a>
       </div>
       <p class="meta" id="hero-meta">Version 1.7.0 · macOS, Apple Silicon and Intel · MIT license</p>
+      <p class="first-open"><strong>First time opening it?</strong> macOS will show a warning. That is expected: click <strong>Done</strong>, then <strong>Open Anyway</strong>. <a href="#first-launch">Show me how</a></p>
       <figure class="shot hero-shot">
         <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
         <img src="/img/main-window.jpg" alt="The Tavrix window: saved sessions on the left, a file panel and a terminal in the middle, and an editor with several open files below" width="1700" height="1050" fetchpriority="high">
@@ -183,31 +184,23 @@
       </div>
       
 
-      <div class="steps">
-        <h3>Install in three steps</h3>
-        <ol>
-          <li>Open the downloaded <code>.dmg</code> and drag <strong>Tavrix</strong> into <strong>Applications</strong>.</li>
-          <li>Open Tavrix. The first time, macOS shows a warning (see below).</li>
-          <li>Click <strong>+</strong> to add your first server. A short tour starts by itself.</li>
+      <div class="install" id="first-launch" role="note" aria-labelledby="install-title">
+        <p class="install-flag">Do not skip this</p>
+        <h3 id="install-title">How to install and open Tavrix</h3>
+        <p class="install-lead">Tavrix is not signed by a paid Apple Developer account, so macOS says <em>"Apple could not verify Tavrix is free of malware"</em> the first time you open it. The app is open source, and nothing is wrong with your download. You only need to do this once.</p>
+        <ol class="install-steps">
+          <li><span class="n">1</span><div><strong>Install</strong><p>Open the downloaded <code>.dmg</code> and drag <strong>Tavrix</strong> into <strong>Applications</strong>.</p></div></li>
+          <li><span class="n">2</span><div><strong>Open it once</strong><p>Open Tavrix from Applications. macOS shows the warning. Click <strong>Done</strong>. <em>Do not click Move to Trash.</em></p></div></li>
+          <li><span class="n">3</span><div><strong>Allow it</strong><p>Open <strong>System Settings → Privacy &amp; Security</strong>, scroll down to <strong>Security</strong>, click <strong>Open Anyway</strong> next to Tavrix and enter your password.</p></div></li>
+          <li><span class="n">4</span><div><strong>Use it</strong><p>Open Tavrix again and click <strong>Open</strong>. Click <strong>+</strong> to add your first server. A short tour starts by itself.</p></div></li>
         </ol>
+        <p class="install-alt"><strong>Prefer Terminal?</strong> Run this once, then open Tavrix normally:</p>
+        <pre><code>xattr -dr com.apple.quarantine /Applications/Tavrix.app</code></pre>
+        <p class="install-alt">Saw <em>"Tavrix is damaged"</em> or <em>"Not Opened"</em> instead? It is the same thing and the same fix.</p>
       </div>
 
-      <details class="faq warn" open>
-        <summary>"Apple could not verify Tavrix…" What does that mean, and how do I open it?</summary>
-        <div>
-          <p>Tavrix is not signed by a paid Apple Developer account, so macOS cautions you the first time you open a downloaded copy. The app is open source, and each release lists a checksum so you can verify your download.</p>
-          <ol>
-            <li>Click <strong>Done</strong>. <em>Do not click Move to Trash.</em></li>
-            <li>Open <strong>System Settings → Privacy &amp; Security</strong> and scroll down to <strong>Security</strong>.</li>
-            <li>Click <strong>Open Anyway</strong> next to Tavrix and enter your password.</li>
-          </ol>
-          <p>Prefer Terminal? <code>xattr -dr com.apple.quarantine /Applications/Tavrix.app</code></p>
-          <p>You only need to do this once per downloaded copy.</p>
-        </div>
-      </details>
-
       <details class="faq">
-        <summary>How do I check that my download is genuine?</summary>
+        <summary>How do I verify that my download is genuine?</summary>
         <div>
           <p>Compare the SHA-256 shown above with your file's:</p>
           <pre><code>shasum -a 256 ~/Downloads/Tavrix-*.dmg</code></pre>
