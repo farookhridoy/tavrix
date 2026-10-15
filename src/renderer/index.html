@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+  <title>Tavrix</title>
+  <link rel="stylesheet" href="../../node_modules/@xterm/xterm/css/xterm.css" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <form id="connect">
+    <input id="host" placeholder="host" required />
+    <input id="port" type="number" value="22" />
+    <input id="user" placeholder="username" required />
+    <input id="pass" type="password" placeholder="password (or key path below)" />
+    <input id="key" placeholder="private key path (optional)" />
+    <button>Connect</button>
+    <span id="status"></span>
+  </form>
+  <main>
+    <aside>
+      <div id="cwd"></div>
+      <ul id="files"></ul>
+    </aside>
+    <section id="work">
+      <div id="term"></div>
+      <div id="editor" hidden>
+        <div id="editbar"><span id="editpath"></span><button id="save">Save</button><button id="closeedit">Close</button></div>
+        <textarea id="editarea" spellcheck="false"></textarea>
+      </div>
+    </section>
+  </main>
+  <script src="../../node_modules/@xterm/xterm/lib/xterm.js"></script>
+  <script src="../../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>
