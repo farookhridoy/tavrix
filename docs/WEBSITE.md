@@ -43,9 +43,9 @@ Tests for the build live in `scripts/build-site.test.mjs` (`npm run test:site`) 
 | Branch | Rules |
 |---|---|
 | `main` | A pull request is required (including for the owner), the **test** check must pass, force-pushes and deletion are blocked. |
-| `site` | Only the website workflow can update it; everything else, including the owner, is blocked. Force-pushes and deletion are blocked. |
+| `site` | Only the website workflow can update it, through a dedicated **deploy key** (stored as the `SITE_DEPLOY_KEY` secret; the built-in Actions token is not allowed to write there). Everyone else, including the owner, is blocked. Force-pushes and deletion are blocked. |
 
-If you ever need to change this: GitHub → Settings → Rules → Rulesets.
+If you ever need to change this: GitHub → Settings → Rules → Rulesets. To rotate the publisher key: create a new key pair, replace the deploy key under Settings → Deploy keys (allow write access) and the `SITE_DEPLOY_KEY` secret under Settings → Secrets and variables → Actions, then delete the old key.
 
 ## Security notes
 
