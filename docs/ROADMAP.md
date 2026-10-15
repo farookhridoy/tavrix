@@ -46,7 +46,10 @@
 - [x] "Make executable" for files that start with `#!` but are not executable
 - [x] Refuses to open binary, non-UTF-8 or >5 MB files as text (saving would corrupt them)
 
-## v1.2.0 (current): update notice
+## v1.3.0 (current): faster file panel
+- [x] Pipelined folder reads, ~2-round-trip file open, remembered folders, single-click folders
+
+## v1.2.0: update notice
 - [x] Public repo; update bar driven by GitHub Releases (notify-only: macOS auto-install needs a signed app)
 - [x] Check for Updates menu item, automatic checks can be turned off, versions can be skipped
 
