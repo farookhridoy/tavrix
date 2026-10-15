@@ -11,6 +11,9 @@ contextBridge.exposeInMainWorld('api', {
     start: (id: string, spec: unknown) => ipcRenderer.invoke('fwd:start', id, spec),
     stop: (id: string, fwdId: string) => ipcRenderer.invoke('fwd:stop', id, fwdId),
   },
+  onNeedSecret: (cb: (q: { reqId: string; title: string; label: string; previousFailed: boolean; secret: boolean }) => void) =>
+    ipcRenderer.on('ssh:need-secret', (_e, q) => cb(q)),
+  replySecret: (reqId: string, value: string | null) => ipcRenderer.send('ssh:secret-reply', reqId, value),
   keys: {
     pick: () => ipcRenderer.invoke('keys:pick'),
     inspect: (path: string) => ipcRenderer.invoke('keys:inspect', path),
