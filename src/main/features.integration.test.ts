@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createServer, connect, AddressInfo, Server as NetServer, Socket } from 'node:net';
 import { Server, utils } from 'ssh2';
 import { Session, JumpHostError } from './ssh';
+import { makeKeyPair } from './test-keys';
 
 // Real-server tests. Example: TAVRIX_TEST_SSH=127.0.0.1:2299:me:/path/to/key npm test
 const target = process.env.TAVRIX_TEST_SSH;
@@ -122,7 +123,7 @@ test('forward validation: ports and destinations are checked', { skip }, async (
 });
 
 test('jump host: the destination is reached through the jump, with each host key verified', { skip }, async () => {
-  const { private: hostKey } = utils.generateKeyPairSync('ed25519');
+  const { private: hostKey } = makeKeyPair();
   const dest = new Server({ hostKeys: [hostKey] }, (c) => {
     c.on('authentication', (ctx) => (ctx.method === 'password' && ctx.password === 'pw' ? ctx.accept() : ctx.reject()));
     c.on('error', () => {});

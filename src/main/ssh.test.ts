@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import { AddressInfo } from 'node:net';
 import { Server, utils } from 'ssh2';
 import { Session } from './ssh';
+import { makeKeyPair } from './test-keys';
 
 function startServer(): Promise<{ server: Server; port: number }> {
-  const { private: hostKey } = utils.generateKeyPairSync('ed25519');
+  const { private: hostKey } = makeKeyPair();
   const server = new Server({ hostKeys: [hostKey] }, (client) => {
     client.on('authentication', (ctx) => (ctx.method === 'password' && ctx.password === 'pw' ? ctx.accept() : ctx.reject()));
     client.on('error', () => {});
@@ -49,8 +50,8 @@ test('loadPrivateKey distinguishes missing and wrong passphrases from unreadable
   const enc = join(dir, 'enc');
   const plain = join(dir, 'plain');
   const junk = join(dir, 'junk');
-  writeFileSync(enc, utils.generateKeyPairSync('ed25519', { passphrase: 'pw 1', cipher: 'aes256-ctr', rounds: 8 }).private);
-  writeFileSync(plain, utils.generateKeyPairSync('ed25519').private);
+  writeFileSync(enc, makeKeyPair({ passphrase: 'pw 1', cipher: 'aes256-ctr', rounds: 8 }).private);
+  writeFileSync(plain, makeKeyPair().private);
   writeFileSync(junk, 'not a key');
 
   assert.ok(loadPrivateKey(plain));
@@ -65,8 +66,8 @@ import { homedir } from 'node:os';
 
 test('key files are recognised without reading their contents back, and ~ means the home folder', () => {
   const dir = mkdtempSync(join(tmpdir(), 'tavrix-keyfiles-'));
-  const pair = utils.generateKeyPairSync('ed25519');
-  const enc = utils.generateKeyPairSync('ed25519', { passphrase: 'pw', cipher: 'aes256-ctr', rounds: 8 });
+  const pair = makeKeyPair();
+  const enc = makeKeyPair({ passphrase: 'pw', cipher: 'aes256-ctr', rounds: 8 });
   const files: Record<string, string> = { priv: pair.private, pub: pair.public, enc: enc.private, junk: 'hello world' };
   for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text);
   writeFileSync(join(dir, 'huge'), 'x'.repeat(70 * 1024));
@@ -85,4 +86,10 @@ test('key files are recognised without reading their contents back, and ~ means 
   assert.equal(expandHome('/abs/~/x'), '/abs/~/x');
   assert.equal(expandHome('~other/x'), '~other/x', 'only the current user shorthand is expanded');
   assert.ok(loadPrivateKey(join(dir, 'priv')), 'a plain path still loads');
+});
+
+test('the test key helper never hands out a key that cannot be read back', () => {
+  for (let i = 0; i < 1500; i++) assert.ok(!(utils.parseKey(makeKeyPair().private) instanceof Error), `key #${i}`);
+  const enc = makeKeyPair({ passphrase: 'pw', cipher: 'aes256-ctr', rounds: 8 });
+  assert.ok(!(utils.parseKey(enc.private, 'pw') instanceof Error));
 });

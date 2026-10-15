@@ -4,12 +4,13 @@ import { AddressInfo, createServer } from 'node:net';
 import { Server, utils } from 'ssh2';
 import type { AuthenticationType } from 'ssh2';
 import { Session, SecretPrompt, AuthFailedError, ConnectCancelledError } from './ssh';
+import { makeKeyPair } from './test-keys';
 
 type Mode = 'password' | 'keyboard' | 'publickey-only';
 
 /** An SSH server that records every TCP connection and every login method it was offered. */
 function startServer(mode: Mode, right = 'right') {
-  const { private: hk } = utils.generateKeyPairSync('ed25519');
+  const { private: hk } = makeKeyPair();
   const log = { connections: 0, methods: [] as string[], wrong: 0, loggedIn: 0 };
   const server = new Server({ hostKeys: [hk] }, (c) => {
     log.connections++;
