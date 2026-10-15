@@ -30,7 +30,7 @@ APPLE_KEYCHAIN_PROFILE=tavrix-notary npm run dist:release
 ```
 electron-builder finds the certificate in your keychain automatically, signs with the hardened runtime (`build/entitlements.mac.plist`), submits to Apple for notarization, and staples the ticket. Notarization usually takes a few minutes. Verify:
 ```bash
-spctl -a -vv release/mac-universal/Tavrix.app          # source=Notarized Developer ID
+spctl -a -vv release/mac-arm64/Tavrix.app          # source=Notarized Developer ID
 xcrun stapler validate release/Tavrix-<version>-arm64.dmg
 ```
 Status: configured but not yet run end to end, because no certificate was available when this was written.
