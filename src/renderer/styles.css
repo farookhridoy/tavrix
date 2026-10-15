@@ -1,0 +1,18 @@
+* { box-sizing: border-box; }
+body { margin: 0; height: 100vh; display: flex; flex-direction: column; font: 13px -apple-system, sans-serif; background: #1e1e1e; color: #ddd; }
+#connect { display: flex; gap: 6px; padding: 8px 8px 8px 80px; -webkit-app-region: drag; background: #2a2a2a; }
+#connect input, #connect button { -webkit-app-region: no-drag; background: #1e1e1e; color: #ddd; border: 1px solid #444; padding: 4px 6px; border-radius: 4px; }
+#connect #port { width: 64px; }
+main { flex: 1; display: flex; min-height: 0; }
+aside { width: 260px; border-right: 1px solid #333; display: flex; flex-direction: column; }
+#cwd { padding: 6px 8px; background: #252525; word-break: break-all; }
+#files { list-style: none; margin: 0; padding: 0; overflow: auto; flex: 1; }
+#files li { padding: 3px 10px; cursor: pointer; white-space: nowrap; }
+#files li:hover { background: #333; }
+#work { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+#term { flex: 1; padding: 4px; min-height: 0; }
+#editor { flex: 1; display: flex; flex-direction: column; border-top: 1px solid #333; }
+#editor[hidden] { display: none; }
+#editbar { display: flex; gap: 8px; align-items: center; padding: 4px 8px; background: #252525; }
+#editpath { flex: 1; }
+#editarea { flex: 1; background: #1e1e1e; color: #ddd; border: 0; padding: 8px; font: 12px Menlo, monospace; resize: none; outline: none; }
