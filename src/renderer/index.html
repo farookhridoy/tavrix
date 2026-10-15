@@ -54,7 +54,11 @@
         <input id="f-port" type="number" min="1" max="65535" value="22" />
         <input id="f-user" placeholder="Username" required />
         <input id="f-pass" type="password" placeholder="Password (or key passphrase)" />
-        <input id="f-key" placeholder="Private key path (optional)" />
+        <div class="keyrow">
+          <input id="f-key" placeholder="Private key file (optional)" />
+          <button type="button" id="f-keybrowse" title="Choose a private key file">Browse…</button>
+        </div>
+        <div id="f-keyhint" class="hint"></div>
       </div>
       <div class="tabpane" data-pane="adv" hidden>
         <label>Jump host (connect through another saved session)

@@ -59,3 +59,30 @@ test('loadPrivateKey distinguishes missing and wrong passphrases from unreadable
   assert.throws(() => loadPrivateKey(enc, 'nope'), (e) => e instanceof KeyPassphraseError && e.reason === 'wrong');
   assert.throws(() => loadPrivateKey(junk), (e) => !(e instanceof KeyPassphraseError) && /Cannot read private key/.test((e as Error).message));
 });
+
+import { inspectKeyFile, expandHome } from './ssh';
+import { homedir } from 'node:os';
+
+test('key files are recognised without reading their contents back, and ~ means the home folder', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'tavrix-keyfiles-'));
+  const pair = utils.generateKeyPairSync('ed25519');
+  const enc = utils.generateKeyPairSync('ed25519', { passphrase: 'pw', cipher: 'aes256-ctr', rounds: 8 });
+  const files: Record<string, string> = { priv: pair.private, pub: pair.public, enc: enc.private, junk: 'hello world' };
+  for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text);
+  writeFileSync(join(dir, 'huge'), 'x'.repeat(70 * 1024));
+
+  assert.deepEqual(inspectKeyFile(join(dir, 'priv')), { kind: 'private', type: 'ssh-ed25519' });
+  assert.deepEqual(inspectKeyFile(join(dir, 'enc')), { kind: 'private-encrypted' });
+  assert.deepEqual(inspectKeyFile(join(dir, 'pub')), { kind: 'public' });
+  assert.equal(inspectKeyFile(join(dir, 'junk')).kind, 'invalid');
+  assert.equal(inspectKeyFile(join(dir, 'huge')).kind, 'invalid');
+  assert.deepEqual(inspectKeyFile(join(dir, 'nope')), { kind: 'invalid', message: 'File not found' });
+  assert.equal(inspectKeyFile(dir).kind, 'invalid', 'a folder is not a key');
+  assert.ok(!JSON.stringify(inspectKeyFile(join(dir, 'priv'))).includes('PRIVATE KEY'), 'never returns key material');
+
+  assert.equal(expandHome('~'), homedir());
+  assert.equal(expandHome('~/.ssh/id'), join(homedir(), '.ssh/id'));
+  assert.equal(expandHome('/abs/~/x'), '/abs/~/x');
+  assert.equal(expandHome('~other/x'), '~other/x', 'only the current user shorthand is expanded');
+  assert.ok(loadPrivateKey(join(dir, 'priv')), 'a plain path still loads');
+});
