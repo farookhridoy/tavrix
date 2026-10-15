@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { homedir, userInfo } from 'node:os';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { Session, ConnectRequest, Progress, KeyPassphraseError, JumpHostError, Hop } from './ssh';
+import { Session, ConnectRequest, Progress, KeyPassphraseError, JumpHostError, Hop, FileStat } from './ssh';
 import type { ForwardSpec } from './forwards';
 import { parseSshConfig } from './sshconfig';
 import {
@@ -182,8 +182,19 @@ function registerIpc(): void {
   ipcMain.on('ssh:resize', (_e, id: string, shellId: string, cols: number, rows: number) => sessions.get(id)?.resize(shellId, cols, rows));
   ipcMain.on('ssh:close-shell', (_e, id: string, shellId: string) => sessions.get(id)?.closeShell(shellId));
   ipcMain.handle('sftp:list', (_e, id: string, path: string) => get(id).list(path));
-  ipcMain.handle('sftp:read', (_e, id: string, path: string) => get(id).readFile(path));
-  ipcMain.handle('sftp:write', (_e, id: string, path: string, content: string) => get(id).writeFile(path, content));
+  // Opening records the file's stat first, so a later change is never mistaken for "unchanged".
+  ipcMain.handle('sftp:open', async (_e, id: string, path: string) => {
+    const session = get(id);
+    const stat = await session.stat(path);
+    return { content: await session.readFile(path), stat };
+  });
+  ipcMain.handle('sftp:stat', (_e, id: string, path: string) => get(id).stat(path));
+  ipcMain.handle('sftp:create', (_e, id: string, path: string) => get(id).createFile(path));
+  ipcMain.handle(
+    'sftp:save',
+    (_e, id: string, path: string, content: string, expected: FileStat | undefined, force: boolean) =>
+      get(id).saveFile(path, content, expected, Boolean(force)),
+  );
 
   ipcMain.handle('sftp:mkdir', (_e, id: string, path: string) => get(id).mkdir(path));
   ipcMain.handle('sftp:rename', (_e, id: string, from: string, to: string) => get(id).rename(from, to));

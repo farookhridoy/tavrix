@@ -20,6 +20,10 @@ const joinPath = (dir, name) => (dir === '/' ? '' : dir.replace(/\/$/, '')) + '/
 const parentPath = (p) => p.replace(/\/[^/]+\/?$/, '') || '/';
 const human = (n) => (n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : n < 1073741824 ? (n / 1048576).toFixed(1) + ' MB' : (n / 1073741824).toFixed(2) + ' GB');
 
+// Per-viewer preferences; storage can be unavailable, so never depend on it.
+function readPref(key) { try { return localStorage.getItem('tavrix.' + key); } catch { return null; } }
+function writePref(key, value) { try { localStorage.setItem('tavrix.' + key, value); } catch { /* ignore */ } }
+
 function ask(title, value = '', { secret = false } = {}) {
   return new Promise((resolve) => {
     const dlg = $('ask');
@@ -97,6 +101,7 @@ function createTab(title) {
   const mkBtn = (label, title, fn) => { const b = el('button', '', label); b.title = title; b.onclick = fn; tools.appendChild(b); };
   mkBtn('↑', 'Parent folder', () => tab.sid && browse(tab, parentPath(tab.cwd)));
   mkBtn('⟳', 'Refresh', () => tab.sid && browse(tab, tab.cwd));
+  mkBtn('+ File', 'New empty file', () => newFile(tab));
   mkBtn('+ Folder', 'New folder', () => newFolder(tab));
   mkBtn('Upload', 'Upload files or folders', () => upload(tab));
   tab.cwdEl = el('div', 'cwd', '/');
@@ -114,6 +119,7 @@ function createTab(title) {
     if (e.target !== tab.filesEl) return;
     e.preventDefault();
     showMenu(e.clientX, e.clientY, [
+      { label: 'New file', run: () => newFile(tab) },
       { label: 'New folder', run: () => newFolder(tab) },
       { label: 'Upload here…', run: () => upload(tab) },
       { label: 'Refresh', run: () => browse(tab, tab.cwd) },
@@ -127,9 +133,23 @@ function createTab(title) {
   tab.editorEl.hidden = true;
   const bar = el('div', 'editbar');
   tab.editPathEl = el('span', 'editpath');
+  const autoLabel = el('label', 'auto');
+  tab.autoBox = el('input');
+  tab.autoBox.type = 'checkbox';
+  tab.autoBox.checked = readPref('autosave') === '1';
+  tab.autoBox.onchange = () => { writePref('autosave', tab.autoBox.checked ? '1' : '0'); tab.autoPaused = false; if (tab.autoBox.checked) scheduleAutoSave(tab); };
+  autoLabel.append(tab.autoBox, ' Auto-save');
+  autoLabel.title = 'Save automatically 1.5 s after you stop typing';
+  tab.execBtn = el('button', '', 'Make executable');
+  tab.execBtn.hidden = true;
+  tab.execBtn.title = 'chmod +x: this file starts with #! but is not executable';
+  tab.execBtn.onclick = () => makeExecutable(tab);
+  const reload = el('button', '', 'Reload');
+  reload.title = 'Discard the editor contents and load the file from the server again';
+  reload.onclick = () => reloadFile(tab);
   const save = el('button', '', 'Save');
   const closeEdit = el('button', '', 'Close');
-  bar.append(tab.editPathEl, save, closeEdit);
+  bar.append(tab.editPathEl, autoLabel, tab.execBtn, reload, save, closeEdit);
   tab.monacoEl = el('div', 'monaco');
   tab.editorEl.append(bar, tab.monacoEl);
   tab.statusEl = el('div', 'status');
@@ -221,6 +241,7 @@ function activate(tab) {
     t.pane.classList.toggle('active', t === tab);
   }
   requestAnimationFrame(() => refit(tab));
+  checkExternalChange(tab);
 }
 
 function refit(tab) {
@@ -235,6 +256,7 @@ function refit(tab) {
 function closeTab(tab) {
   if (tab.editing && tab.editDirty && !confirm('Discard unsaved changes in ' + tab.editing + '?')) return;
   if (tab.sid) { window.api.disconnect(tab.sid); bySid.delete(tab.sid); }
+  clearTimeout(tab.autoTimer);
   tab.editor?.dispose();
   tab.model?.dispose();
   for (const pane of tab.panes) pane.term.dispose();
@@ -393,48 +415,141 @@ async function ensureEditor(tab) {
   return monaco;
 }
 
-async function openFile(tab, path) {
-  if (tab.editing === path) return;
-  if (tab.editing && tab.editDirty && !confirm('Discard unsaved changes in ' + tab.editing + '?')) return;
+const sameStat = (a, b) => Boolean(a) && Boolean(b) && a.size === b.size && a.mtime === b.mtime;
+const hasShebang = (tab) => tab.model && tab.model.getValue().startsWith('#!');
+
+function updateEditorBar(tab) {
+  tab.editPathEl.textContent = tab.editing ? tab.editing + (tab.editDirty ? ' ●' : '') : '';
+  const executable = tab.editStat ? (tab.editStat.mode & 0o111) !== 0 : true;
+  tab.execBtn.hidden = !(tab.editing && hasShebang(tab) && !executable);
+}
+
+function newFile(tab) {
+  if (!tab.sid) return;
+  return guarded(tab, 'New file', async () => {
+    const name = await ask('New file name');
+    if (!name) return;
+    if (name.includes('/')) throw new Error('Name cannot contain "/"');
+    const full = joinPath(tab.cwd, name);
+    await window.api.createFile(tab.sid, full); // fails if it already exists
+    await browse(tab, tab.cwd);
+    await openFile(tab, full);
+  });
+}
+
+async function openFile(tab, path, { force = false } = {}) {
+  if (!force && tab.editing === path) return true;
+  if (!force && tab.editing && tab.editDirty && !confirm('Discard unsaved changes in ' + tab.editing + '?')) return false;
   try {
-    const text = await window.api.readFile(tab.sid, path);
+    const { content, stat } = await window.api.openFile(tab.sid, path);
     const monaco = await ensureEditor(tab);
-    const old = tab.model;
-    tab.model = monaco.editor.createModel(text, undefined, monaco.Uri.from({ scheme: 'file', path }));
+    const position = force && tab.editing === path ? tab.editor.getPosition() : null;
+    clearTimeout(tab.autoTimer);
+    // Swap models in one synchronous step: Monaco refuses a second model for the same URI, so the old one goes first.
+    tab.editor.setModel(null);
+    tab.model?.dispose();
+    tab.model = monaco.editor.createModel(content, undefined, monaco.Uri.from({ scheme: 'file', path }));
     tab.editor.setModel(tab.model);
-    old?.dispose();
+    if (position) tab.editor.setPosition(position);
     tab.editing = path;
+    tab.editStat = stat;
     tab.editDirty = false;
-    tab.model.onDidChangeContent(() => { tab.editDirty = true; tab.editPathEl.textContent = path + ' ●'; });
-    tab.editPathEl.textContent = path;
+    tab.autoPaused = false;
+    tab.model.onDidChangeContent(() => { tab.editDirty = true; updateEditorBar(tab); scheduleAutoSave(tab); });
     tab.editorEl.hidden = false;
+    updateEditorBar(tab);
     refit(tab);
     tab.editor.focus();
+    return true;
   } catch (err) {
-    tab.msgEl.textContent = String(err.message || err);
+    tab.msgEl.textContent = String(err.message || err).replace(/^Error invoking remote method '[^']*': (Error: )?/, '');
+    return false;
   }
 }
 
-async function saveFile(tab) {
+function reloadFile(tab) {
   if (!tab.editing) return;
+  if (tab.editDirty && !confirm('Discard your unsaved changes and reload ' + tab.editing + ' from the server?')) return;
+  return openFile(tab, tab.editing, { force: true });
+}
+
+function scheduleAutoSave(tab) {
+  clearTimeout(tab.autoTimer);
+  if (!tab.autoBox.checked || tab.autoPaused || !tab.editing) return;
+  tab.autoTimer = setTimeout(() => saveFile(tab, { auto: true }), 1500);
+}
+
+async function saveFile(tab, { auto = false } = {}) {
+  if (!tab.editing || tab.saving || !tab.sid) return;
+  tab.saving = true;
+  const path = tab.editing;
+  const version = tab.model.getVersionId();
+  const content = tab.model.getValue();
   try {
-    await window.api.writeFile(tab.sid, tab.editing, tab.model.getValue());
-    tab.editDirty = false;
-    tab.editPathEl.textContent = tab.editing;
-    tab.msgEl.textContent = 'Saved ' + tab.editing;
+    let res = await window.api.saveFile(tab.sid, path, content, tab.editStat, false);
+    if (res.conflict) {
+      const what = res.stat ? 'changed on the server' : 'deleted on the server';
+      if (auto) {
+        tab.autoPaused = true; // never overwrite someone else's change unattended
+        tab.msgEl.textContent = `Auto-save paused: ${path} was ${what}. Save manually to choose.`;
+        return;
+      }
+      if (!confirm(`${path} was ${what} since you opened it.\n\nOverwrite it with your version? (Cancel keeps editing; use Reload to take the server's version.)`)) return;
+      res = await window.api.saveFile(tab.sid, path, content, tab.editStat, true);
+    }
+    if (tab.editing !== path) return; // closed or switched while saving
+    tab.editStat = res.stat;
+    tab.autoPaused = false;
+    if (tab.model.getVersionId() === version) tab.editDirty = false; // keep "unsaved" if typing continued meanwhile
+    updateEditorBar(tab);
+    tab.msgEl.textContent = (auto ? 'Auto-saved ' : 'Saved ') + path;
   } catch (err) {
-    tab.msgEl.textContent = 'Save failed: ' + (err.message || err);
+    tab.msgEl.textContent = 'Save failed: ' + String(err.message || err).replace(/^Error invoking remote method '[^']*': (Error: )?/, '');
+  } finally {
+    tab.saving = false;
+    if (tab.editDirty) scheduleAutoSave(tab);
   }
 }
+
+async function makeExecutable(tab) {
+  if (!tab.editing || !tab.editStat) return;
+  await guarded(tab, 'Make executable', async () => {
+    const mode = tab.editStat.mode;
+    await window.api.chmod(tab.sid, tab.editing, mode | ((mode & 0o444) >> 2)); // +x wherever there is +r
+    tab.editStat = await window.api.stat(tab.sid, tab.editing);
+    updateEditorBar(tab);
+    tab.msgEl.textContent = 'Made ' + tab.editing + ' executable (' + (tab.editStat.mode & 0o777).toString(8) + ')';
+  });
+}
+
+/** When the window or tab regains focus, notice edits made on the server by someone or something else. */
+async function checkExternalChange(tab) {
+  if (!tab || !tab.sid || !tab.editing || tab.saving) return;
+  try {
+    const cur = await window.api.stat(tab.sid, tab.editing);
+    if (sameStat(cur, tab.editStat)) return;
+    if (!cur) { tab.msgEl.textContent = tab.editing + ' was deleted on the server'; return; }
+    if (!tab.editDirty) {
+      const path = tab.editing;
+      if (await openFile(tab, path, { force: true })) tab.msgEl.textContent = 'Reloaded ' + path + ': it changed on the server';
+    } else {
+      tab.msgEl.textContent = tab.editing + ' changed on the server while you have unsaved edits; saving will ask before overwriting';
+    }
+  } catch { /* connection may be gone */ }
+}
+window.addEventListener('focus', () => checkExternalChange(active));
 
 function closeEditor(tab, force = false) {
   if (!force && tab.editDirty && !confirm('Discard unsaved changes?')) return;
+  clearTimeout(tab.autoTimer);
   tab.editorEl.hidden = true;
   tab.editing = null;
+  tab.editStat = null;
   tab.editDirty = false;
   tab.editor?.setModel(null);
   tab.model?.dispose();
   tab.model = null;
+  updateEditorBar(tab);
   refit(tab);
 }
 

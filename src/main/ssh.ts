@@ -43,6 +43,17 @@ export interface RemoteEntry {
   mode: number;
 }
 
+export interface FileStat {
+  size: number;
+  mtime: number;
+  mode: number;
+}
+
+export type SaveResult = { conflict: false; stat: FileStat | null } | { conflict: true; stat: FileStat | null };
+
+/** Largest file the editor will open; bigger files are for download. */
+export const MAX_EDIT_BYTES = 5 * 1024 * 1024;
+
 export interface Progress {
   name: string;
   done: number;
@@ -362,15 +373,44 @@ export class Session {
     return new Promise((resolve, reject) => s.realpath(path, (e, p) => (e ? reject(e) : resolve(p))));
   }
 
+  /** Size, modification time (seconds) and permission bits; null when the path does not exist. */
+  async stat(path: string): Promise<FileStat | null> {
+    try {
+      const st = await this.call<import('ssh2').Stats>((s, cb) => s.stat(path, cb));
+      return { size: st.size, mtime: st.mtime, mode: st.mode & 0o7777 };
+    } catch (err) {
+      if ((err as { code?: number }).code === 2) return null; // SFTP NO_SUCH_FILE
+      throw err;
+    }
+  }
+
+  /** Create an empty file (0644). Fails if it already exists. */
+  async createFile(path: string): Promise<void> {
+    const handle = await this.call<Buffer>((s, cb) => s.open(path, 'wx', 0o644, cb));
+    await this.call<void>((s, cb) => s.close(handle, (e) => cb(e)));
+  }
+
+  /** Read a text file for editing. Refuses files that would not survive a text round trip. */
   async readFile(path: string): Promise<string> {
+    const st = await this.stat(path);
+    if (!st) throw new Error(`${path} does not exist`);
+    if (st.size > MAX_EDIT_BYTES) {
+      throw new Error(`This file is ${(st.size / 1048576).toFixed(1)} MB, too large to edit here (limit ${MAX_EDIT_BYTES / 1048576} MB). Download it instead.`);
+    }
     const s = await this.sftp();
-    return new Promise((resolve, reject) => {
+    const buf = await new Promise<Buffer>((resolve, reject) => {
       const chunks: Buffer[] = [];
       s.createReadStream(path)
         .on('data', (c: Buffer) => chunks.push(c))
         .on('error', reject)
-        .on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+        .on('end', () => resolve(Buffer.concat(chunks)));
     });
+    if (buf.includes(0)) throw new Error('This looks like a binary file; saving it as text would corrupt it. Download it instead.');
+    try {
+      return new TextDecoder('utf-8', { fatal: true }).decode(buf);
+    } catch {
+      throw new Error('This file is not valid UTF-8 text; saving it would corrupt it. Download it instead.');
+    }
   }
 
   async writeFile(path: string, content: string): Promise<void> {
@@ -378,6 +418,19 @@ export class Session {
     return new Promise((resolve, reject) => {
       s.writeFile(path, Buffer.from(content, 'utf8'), (e) => (e ? reject(e) : resolve()));
     });
+  }
+
+  /**
+   * Save unless the file changed (or vanished) since `expected` was recorded. `force` skips the check.
+   * The check and the write are separate SFTP calls, so a change landing in between is still possible.
+   */
+  async saveFile(path: string, content: string, expected: FileStat | undefined, force: boolean): Promise<SaveResult> {
+    if (!force && expected) {
+      const cur = await this.stat(path);
+      if (!cur || cur.size !== expected.size || cur.mtime !== expected.mtime) return { conflict: true, stat: cur };
+    }
+    await this.writeFile(path, content);
+    return { conflict: false, stat: await this.stat(path) };
   }
 
   close(): void {

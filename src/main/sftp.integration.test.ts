@@ -102,3 +102,64 @@ test('cancelling an upload removes the partial file and keeps the session usable
     s.close();
   }
 });
+
+test('editing safety: new files, change detection, and files that must not be edited as text', { skip }, async () => {
+  const [host, port, username, privateKeyPath] = (target as string).split(':');
+  const s = new Session();
+  await s.connect({ host, port: Number(port), username, privateKeyPath }, async () => true);
+  const root = `${await s.realpath('.')}/tavrix-edit-${process.pid}`;
+  try {
+    await s.mkdir(root);
+
+    // new file: created empty with 0644, and never clobbers an existing one
+    await s.createFile(`${root}/new.sh`);
+    assert.deepEqual(await s.stat(`${root}/new.sh`), { size: 0, mtime: (await s.stat(`${root}/new.sh`))!.mtime, mode: 0o644 });
+    await assert.rejects(s.createFile(`${root}/new.sh`));
+    assert.equal(await s.stat(`${root}/missing`), null);
+
+    // saving records a fresh stat; saving again from that stat succeeds
+    const first = await s.saveFile(`${root}/new.sh`, '#!/bin/bash\necho 1\n', undefined, false);
+    assert.equal(first.conflict, false);
+    const expected = first.stat!;
+    assert.equal(expected.size, 19);
+    const second = await s.saveFile(`${root}/new.sh`, '#!/bin/bash\necho 2\n', expected, false);
+    assert.equal(second.conflict, false);
+
+    // someone else changes the file: our stale save is refused and nothing is overwritten
+    await s.writeFile(`${root}/new.sh`, 'changed elsewhere, different length');
+    const stale = await s.saveFile(`${root}/new.sh`, 'my stale edit', second.stat!, false);
+    assert.equal(stale.conflict, true);
+    assert.equal(await s.readFile(`${root}/new.sh`), 'changed elsewhere, different length');
+    // ...unless forced
+    assert.equal((await s.saveFile(`${root}/new.sh`, 'forced', second.stat!, true)).conflict, false);
+    assert.equal(await s.readFile(`${root}/new.sh`), 'forced');
+
+    // deleted on the server: reported as a conflict too, and force recreates it
+    const before = (await s.stat(`${root}/new.sh`))!;
+    await s.remove(`${root}/new.sh`);
+    const gone = await s.saveFile(`${root}/new.sh`, 'x', before, false);
+    assert.deepEqual([gone.conflict, gone.stat], [true, null]);
+
+    // binary, non-UTF-8 and oversized files are refused instead of being corrupted on save
+    writeFileSync(join(local0(), 'b.bin'), Buffer.from([1, 2, 0, 3]));
+    writeFileSync(join(local0(), 'latin1.txt'), Buffer.from([0x63, 0x61, 0x66, 0xe9]));
+    writeFileSync(join(local0(), 'big.txt'), 'a'.repeat(5 * 1024 * 1024 + 1));
+    await s.upload([join(local0(), 'b.bin'), join(local0(), 'latin1.txt'), join(local0(), 'big.txt')], root, () => {}, async () => true);
+    await assert.rejects(s.readFile(`${root}/b.bin`), /binary/);
+    await assert.rejects(s.readFile(`${root}/latin1.txt`), /UTF-8/);
+    await assert.rejects(s.readFile(`${root}/big.txt`), /too large/);
+    await s.writeFile(`${root}/ok.txt`, 'héllo ✓');
+    assert.equal(await s.readFile(`${root}/ok.txt`), 'héllo ✓');
+    await assert.rejects(s.readFile(`${root}/nope`), /does not exist/);
+  } finally {
+    await s.remove(root).catch(() => {});
+    rmSync(local0(), { recursive: true, force: true });
+    s.close();
+  }
+});
+
+let scratch: string | undefined;
+function local0(): string {
+  scratch ??= mkdtempSync(join(tmpdir(), 'tavrix-edit-'));
+  return scratch;
+}

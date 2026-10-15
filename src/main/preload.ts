@@ -17,8 +17,11 @@ contextBridge.exposeInMainWorld('api', {
     remove: (id: string) => ipcRenderer.invoke('snippets:delete', id),
   },
   list: (id: string, path: string) => ipcRenderer.invoke('sftp:list', id, path),
-  readFile: (id: string, path: string) => ipcRenderer.invoke('sftp:read', id, path),
-  writeFile: (id: string, path: string, content: string) => ipcRenderer.invoke('sftp:write', id, path, content),
+  openFile: (id: string, path: string) => ipcRenderer.invoke('sftp:open', id, path),
+  stat: (id: string, path: string) => ipcRenderer.invoke('sftp:stat', id, path),
+  createFile: (id: string, path: string) => ipcRenderer.invoke('sftp:create', id, path),
+  saveFile: (id: string, path: string, content: string, expected: unknown, force: boolean) =>
+    ipcRenderer.invoke('sftp:save', id, path, content, expected, force),
   mkdir: (id: string, path: string) => ipcRenderer.invoke('sftp:mkdir', id, path),
   rename: (id: string, from: string, to: string) => ipcRenderer.invoke('sftp:rename', id, from, to),
   chmod: (id: string, path: string, mode: number) => ipcRenderer.invoke('sftp:chmod', id, path, mode),

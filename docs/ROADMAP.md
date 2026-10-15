@@ -31,7 +31,7 @@
 - [x] `~/.ssh/config` hosts without `User` default to your local account name
 - [ ] Signed + notarized release build (needs the Developer ID certificate on the build Mac)
 
-## v1.0.0 (current): power features
+## v1.0.0: power features
 - [x] Port forwarding UI: local (-L), remote (-R), dynamic SOCKS5 (-D)
 - [x] Jump hosts (ProxyJump): chains of saved sessions; `~/.ssh/config` ProxyJump (single alias) imported
 - [x] Split terminal panes (side by side or stacked), each its own shell on the same connection
@@ -39,8 +39,15 @@
 - [x] Edit saved sessions
 - [x] Uploads and downloads keep the executable bit
 
+## v1.1.0 (current): safer editing
+- [x] New file button (creates an empty file; refuses to overwrite)
+- [x] Auto-save (off by default; 1.5 s after typing stops; pauses instead of overwriting a changed file)
+- [x] Detects server-side changes: reloads a clean editor, warns a dirty one, asks before overwriting
+- [x] "Make executable" for files that start with `#!` but are not executable
+- [x] Refuses to open binary, non-UTF-8 or >5 MB files as text (saving would corrupt them)
+
 ## Next
-- [ ] New file button; auto-save option; warn when a file changed on the server since it was opened
 - [ ] Saved tunnels that start with a session; prompt for jump-host secrets
 - [ ] Nested split layouts; mixed row/column
+- [ ] Atomic save (write to a temp file, then rename) to survive a dropped connection mid-save
 - [ ] Auto-update (needs a signed app), plugins
