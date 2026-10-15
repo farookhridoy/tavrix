@@ -46,7 +46,18 @@
 - [x] "Make executable" for files that start with `#!` but are not executable
 - [x] Refuses to open binary, non-UTF-8 or >5 MB files as text (saving would corrupt them)
 
-## v1.4.0 (current): settings
+## v1.7.0 (current): layout, editor tabs, tour and manual
+- [x] Resizable panels, show/hide icons, full-screen editor, editor tabs with icon buttons
+- [x] Quick tour on first launch, Help menu, in-app manual (generated from docs/MANUAL.md)
+- [x] README rewritten with screenshots
+
+## v1.6.0: gentler logins
+- [x] Password logins on one connection, keyboard-interactive, no crash when closing a window with a live session
+
+## v1.5.0: key picker
+- [x] Browse… for the private key with a check of what was chosen
+
+## v1.4.0: settings
 - [x] Settings window, tabbed session dialog, per-session terminal overrides, keep-alive/compression/timeout, startup folder and command, sidebar folders
 
 ## v1.3.0: faster file panel
@@ -57,7 +68,7 @@
 - [x] Check for Updates menu item, automatic checks can be turned off, versions can be skipped
 
 ## Next
-- [ ] More session types from MobaXterm's list: SFTP-only, FTP, Telnet, then VNC/RDP launchers
+- [ ] More session types: SFTP-only, FTP, Telnet, then VNC/RDP launchers
 - [ ] Saved tunnels that start with a session; prompt for jump-host secrets
 - [ ] Nested split layouts; mixed row/column
 - [ ] Atomic save (write to a temp file, then rename) to survive a dropped connection mid-save

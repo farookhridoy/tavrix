@@ -8,7 +8,22 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div id="titlebar"></div>
+  <div id="titlebar">
+    <div id="layoutTools">
+      <button id="tglSessions" class="on icon" title="Show or hide the sessions sidebar (⌘B)" aria-label="Show or hide the sessions sidebar">
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5" fill="none" stroke="currentColor"/><path d="M6 2.5v11" stroke="currentColor"/><rect x="2" y="3" width="3.6" height="10" fill="currentColor" class="fill"/></svg>
+      </button>
+      <button id="tglFiles" class="on icon" title="Show or hide the file panel (⌘⇧B)" aria-label="Show or hide the file panel">
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M1.5 4.2c0-.7.5-1.2 1.2-1.2h3.1l1.4 1.6h6.1c.7 0 1.2.5 1.2 1.2v6.2c0 .7-.5 1.2-1.2 1.2H2.7c-.7 0-1.2-.5-1.2-1.2z" fill="none" stroke="currentColor"/><path d="M1.6 6.6h12.8" stroke="currentColor"/></svg>
+      </button>
+    </div>
+    <div id="helpTools">
+      <button id="helpManual" title="Open the manual (F1)" aria-label="Open the manual">
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M2.5 3.2c1.9-.5 3.7-.3 5.5.8 1.8-1.1 3.6-1.3 5.5-.8v8.9c-1.9-.5-3.7-.3-5.5.8-1.8-1.1-3.6-1.3-5.5-.8z" fill="none" stroke="currentColor" stroke-linejoin="round"/><path d="M8 4v8.9" stroke="currentColor"/></svg>
+        Manual
+      </button>
+    </div>
+  </div>
   <div id="update" hidden>
     <span id="updateMsg"></span>
     <span class="btns">
@@ -32,6 +47,7 @@
       <ul id="snippetList"></ul>
       <div id="notice"></div>
     </aside>
+    <div id="sessionsSplit" class="splitter v" role="separator" aria-orientation="vertical" tabindex="0" title="Drag to resize; double-click to reset"></div>
     <div id="content">
       <div id="tabbar"></div>
       <div id="panes"></div>
@@ -49,16 +65,31 @@
         <button type="button" data-tab="book">Bookmark</button>
       </div>
       <div class="tabpane" data-pane="basic">
-        <input id="f-name" placeholder="Name (optional)" />
-        <input id="f-host" placeholder="Host" required />
-        <input id="f-port" type="number" min="1" max="65535" value="22" />
-        <input id="f-user" placeholder="Username" required />
-        <input id="f-pass" type="password" placeholder="Password (or key passphrase)" />
-        <div class="keyrow">
-          <input id="f-key" placeholder="Private key file (optional)" />
-          <button type="button" id="f-keybrowse" title="Choose a private key file">Browse…</button>
+        <label><span class="lab">Name <span class="opt">(optional)</span></span>
+          <input id="f-name" placeholder="e.g. web-01" />
+        </label>
+        <div class="row2">
+          <label>Host
+            <input id="f-host" placeholder="example.com or 203.0.113.10" required />
+          </label>
+          <label>Port
+            <input id="f-port" type="number" min="1" max="65535" value="22" />
+          </label>
         </div>
-        <div id="f-keyhint" class="hint"></div>
+        <label>Username
+          <input id="f-user" placeholder="deploy" required />
+        </label>
+        <label><span class="lab">Password <span class="opt">(or the passphrase of your key; leave blank to be asked)</span></span>
+          <input id="f-pass" type="password" placeholder="Password" />
+        </label>
+        <div class="field">
+          <span class="lab">Private key file <span class="opt">(optional)</span></span>
+          <div class="keyrow">
+            <input id="f-key" placeholder="Choose the key file, e.g. ~/.ssh/id_ed25519" />
+            <button type="button" id="f-keybrowse" title="Choose a private key file">Browse…</button>
+          </div>
+          <div id="f-keyhint" class="hint"></div>
+        </div>
       </div>
       <div class="tabpane" data-pane="adv" hidden>
         <label>Jump host (connect through another saved session)
@@ -149,6 +180,34 @@
       <div class="row"><button type="button" id="s-cancel">Cancel</button><button>Save</button></div>
     </form>
   </dialog>
+  <dialog id="manual">
+    <div class="mhead">
+      <strong>Tavrix Manual</strong>
+      <span class="mbtns">
+        <button id="manTour">Quick tour</button>
+        <button id="manGithub" title="Open the same manual on GitHub">Open on GitHub ↗</button>
+        <button id="manClose">Close</button>
+      </span>
+    </div>
+    <iframe id="manualFrame" title="Tavrix manual"></iframe>
+  </dialog>
+
+  <div id="tour" hidden role="dialog" aria-modal="true" aria-labelledby="tourTitle">
+    <div id="tourHole"></div>
+    <div id="tourCard">
+      <button id="tourClose" aria-label="Close the tour" title="Close the tour (Esc)">✕</button>
+      <h3 id="tourTitle"></h3>
+      <div id="tourBody"></div>
+      <div class="tourfoot">
+        <span id="tourDots" aria-hidden="true"></span>
+        <span class="tourbtns">
+          <button id="tourSkip">Skip tour</button>
+          <button id="tourBack">Back</button>
+          <button id="tourNext" class="primary">Next</button>
+        </span>
+      </div>
+    </div>
+  </div>
   <div id="menu" hidden></div>
 
   <script src="../../node_modules/@xterm/xterm/lib/xterm.js"></script>

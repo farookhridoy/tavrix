@@ -111,6 +111,8 @@ export interface Settings {
   updateCheck: boolean;
   /** A release version the user chose not to be told about again. */
   skippedVersion?: string;
+  /** The first-run quick tour was shown and closed (finished or skipped). */
+  tourSeen: boolean;
   /** Terminal appearance for every session unless the session overrides it. */
   terminal: TerminalPrefs;
   /** Connection defaults for every session unless the session overrides them. */
@@ -127,17 +129,19 @@ export function getSettings(): Settings {
   return {
     updateCheck: stored.updateCheck ?? true,
     skippedVersion: stored.skippedVersion,
+    tourSeen: stored.tourSeen ?? false,
     terminal: { ...DEFAULT_TERMINAL, ...sanitizeTerminal(stored.terminal) },
     connection: { ...DEFAULT_CONNECTION, ...sanitizeConnection(stored.connection) },
   };
 }
 
 /** Merge a change into the saved settings. Terminal and connection values are validated; unknown keys are ignored. */
-export function saveSettings(patch: { updateCheck?: boolean; skippedVersion?: string; terminal?: unknown; connection?: unknown }): Settings {
+export function saveSettings(patch: { updateCheck?: boolean; skippedVersion?: string; tourSeen?: boolean; terminal?: unknown; connection?: unknown }): Settings {
   const cur = getSettings();
   const next: Settings = {
     updateCheck: typeof patch.updateCheck === 'boolean' ? patch.updateCheck : cur.updateCheck,
     skippedVersion: 'skippedVersion' in patch ? patch.skippedVersion : cur.skippedVersion,
+    tourSeen: typeof patch.tourSeen === 'boolean' ? patch.tourSeen : cur.tourSeen,
     terminal: { ...cur.terminal, ...sanitizeTerminal(patch.terminal) },
     connection: { ...cur.connection, ...sanitizeConnection(patch.connection) },
   };

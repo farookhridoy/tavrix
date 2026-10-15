@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, Menu, IpcMainInvokeEvent, MenuItemConstructorOptions, WebContents } from 'electron';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { homedir, userInfo } from 'node:os';
 import { readFileSync, existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
@@ -179,6 +180,30 @@ function hostVerifier(win: BrowserWindow | null, host: string, port: number) {
   };
 }
 
+/* ---------- help ---------- */
+
+/** The only places the Help buttons can open. The window names one by key; it never supplies a URL. */
+const HELP_LINKS = {
+  manual: 'https://github.com/farookhridoy/tavrix/blob/main/docs/MANUAL.md',
+  readme: 'https://github.com/farookhridoy/tavrix#readme',
+  issues: 'https://github.com/farookhridoy/tavrix/issues',
+  releases: 'https://github.com/farookhridoy/tavrix/releases',
+} as const;
+type HelpLink = keyof typeof HELP_LINKS;
+const isHelpLink = (k: unknown): k is HelpLink => typeof k === 'string' && Object.hasOwn(HELP_LINKS, k);
+
+/** Links clicked inside the manual: web pages open in the default browser; nothing else is ever opened or navigated to. */
+function openWebLink(url: string): void {
+  try {
+    if (new URL(url).protocol === 'https:') void shell.openExternal(url);
+  } catch { /* not a URL */ }
+}
+
+function sendUi(channel: string): void {
+  const w = BrowserWindow.getAllWindows()[0];
+  if (w) notify(w.webContents, channel);
+}
+
 /* ---------- updates ---------- */
 
 let pendingUpdate: UpdateInfo | null = null;
@@ -234,6 +259,12 @@ function scheduleUpdateChecks(): void {
   setInterval(() => void runUpdateCheck(false), 12 * HOUR).unref();
 }
 
+/** Ask the window to show/hide a panel or switch the editor to full screen. */
+function toggleUi(what: 'sessions' | 'files' | 'editor-full'): void {
+  const w = BrowserWindow.getAllWindows()[0];
+  if (w) notify(w.webContents, 'ui:toggle', what);
+}
+
 function buildMenu(): void {
   const template: MenuItemConstructorOptions[] = [
     {
@@ -265,8 +296,36 @@ function buildMenu(): void {
       ],
     },
     { role: 'editMenu' },
-    { role: 'viewMenu' },
+    {
+      label: 'View',
+      submenu: [
+        { label: 'Show/Hide Sessions Sidebar', accelerator: 'CmdOrCtrl+B', click: () => toggleUi('sessions') },
+        { label: 'Show/Hide File Panel', accelerator: 'CmdOrCtrl+Shift+B', click: () => toggleUi('files') },
+        { label: 'Full Screen Editor', accelerator: 'CmdOrCtrl+Shift+F', click: () => toggleUi('editor-full') },
+        { type: 'separator' },
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' },
+      ],
+    },
     { role: 'windowMenu' },
+    {
+      role: 'help',
+      submenu: [
+        { label: 'Quick Tour', click: () => sendUi('ui:tour') },
+        { label: 'Manual', accelerator: 'F1', click: () => sendUi('ui:manual') },
+        { type: 'separator' },
+        { label: 'Manual on GitHub', click: () => openWebLink(HELP_LINKS.manual) },
+        { label: 'Release Notes', click: () => openWebLink(HELP_LINKS.releases) },
+        { label: 'Report an Issue…', click: () => openWebLink(HELP_LINKS.issues) },
+      ],
+    },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
@@ -284,6 +343,18 @@ function createWindow(): BrowserWindow {
     },
   });
   win.loadFile(join(__dirname, '../../src/renderer/index.html'));
+  // The window only ever shows the app's own files. A link the user clicks in the manual (target=_blank) opens in the browser;
+  // anything that tries to navigate the window or the manual frame away from the app is simply blocked.
+  const appRoot = pathToFileURL(join(__dirname, '../..')).href;
+  const blockOutside = (e: { preventDefault(): void }, url: string): void => {
+    if (!url.startsWith(appRoot)) e.preventDefault();
+  };
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    openWebLink(url);
+    return { action: 'deny' };
+  });
+  win.webContents.on('will-navigate', (e, url) => blockOutside(e, url));
+  win.webContents.on('will-frame-navigate', (e) => blockOutside(e, e.url));
   win.on('focus', recheckOnFocus);
   win.webContents.on('did-finish-load', announceUpdate); // a window opened after the check still gets the banner
   return win;
@@ -443,6 +514,13 @@ function registerIpc(): void {
   ipcMain.on('ssh:secret-reply', (_e, reqId: string, value: string | null) => {
     secretWaiters.get(reqId)?.(typeof value === 'string' ? value : null);
     secretWaiters.delete(reqId);
+  });
+
+  ipcMain.handle('help:open', (_e, key: unknown) => {
+    if (isHelpLink(key)) openWebLink(HELP_LINKS[key]);
+  });
+  ipcMain.handle('tour:done', () => {
+    saveSettings({ tourSeen: true });
   });
 
   ipcMain.handle('settings:get', () => ({ ...getSettings(), defaults: { terminal: DEFAULT_TERMINAL, connection: DEFAULT_CONNECTION } }));

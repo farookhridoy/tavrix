@@ -45,6 +45,9 @@ gh release create vX.Y.Z release/Tavrix-X.Y.Z-arm64.dmg release/Tavrix-X.Y.Z-x64
 ```
 Name the files so the CPU is the last part before `.dmg` (`-arm64.dmg`, `-x64.dmg`); the update notice uses that to pick the right one. Put the changelog entry, both SHA-256 values and the "unsigned: right-click > Open" note in the release notes. The tag must be plain `vX.Y.Z` (no `-beta`); other tags are ignored by the app. Mark pre-releases as pre-release so they are not "latest".
 
+## Documentation and screenshots
+`docs/MANUAL.md` is the single source for the manual. `npm run build` turns it into `src/renderer/manual.html` (git-ignored) for the in-app Manual window, and GitHub shows the same file. Screenshots live in `docs/images/` and are packaged with the app (about 1.7 MB). When the interface changes, retake the affected screenshots (they are plain PNG/JPEG files; the demo used for them is a scratch server with made-up sessions) and keep the file names the manual refers to.
+
 ## Cutting a version
 1. Update `CHANGELOG.md` and `docs/ROADMAP.md`.
 2. `npm version <x.y.z> --no-git-tag-version`, run `npm test`.

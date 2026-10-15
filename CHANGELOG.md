@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.7.0
+- **Quick tour** on first launch: eight short steps that highlight the controls. Close it any time (✕, Skip, Esc); it is remembered and does not return by itself. Reopen it from **Help → Quick Tour**.
+- **Manual**: a Manual button (top right, or F1) opens the full documentation inside the app, with an **Open on GitHub** button for the same pages. The in-app manual is generated from `docs/MANUAL.md` at build time, so it always matches GitHub. A **Help** menu adds Quick Tour, Manual, release notes and Report an Issue.
+- **New README** with screenshots, a quick start, a feature tour, shortcuts, troubleshooting and build instructions.
+- **Editor tabs**: every open file gets its own tab with its own unsaved marker, cursor, save and server-change check; Close, Reload, Save, Full screen and Make executable are now **icon buttons with tooltips**.
+- **Full-screen editor** (⌘⇧F, button, or View menu; Esc leaves).
+- **Show/hide panels**: icon buttons (and ⌘B / ⌘⇧B) for the sessions sidebar and the file panel.
+- **Resizable layout**: drag the dividers between the sidebar, file panel, terminals and editor, and between split terminals. Double-click a divider to reset it; arrow keys nudge a focused one. Sizes are remembered.
+- The session form now labels every field.
+- Fixes: the editor could only grow, never shrink, when dragging its divider; closing all editor tabs at once could leave an empty editor on screen; the full-screen editor could stop short of the bottom of the window; a page-level scrollbar could appear for an instant and shift the layout. The build now fails if the renderer script has a syntax error instead of producing a blank window.
+- Links in the manual open in your browser; the window and the manual can never be navigated to another site.
+
 ## 1.6.0
 - **Password logins use one connection.** Before, a session with no saved password connected once just to find out it needed a password, hung up, and connected again (and every typo cost another full connection). The password is now asked for on the same connection, like OpenSSH, with up to 3 tries. This matters on servers with brute-force protection (fail2ban, firewall rate limits) that count connections or failed logins per IP. Key logins already used one connection per session.
 - Servers that only accept **keyboard-interactive** (common with PAM) now work, including one-time-code prompts.

@@ -1,12 +1,12 @@
 {
   "name": "tavrix",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "Tavrix: an SSH terminal with a remote file browser and editor for macOS",
   "main": "dist/main/main.js",
   "private": true,
   "license": "MIT",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node scripts/check-renderer.mjs && node scripts/build-manual.mjs && tsc -p tsconfig.json",
     "start": "npm run build && electron .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && node --test dist/main/*.test.js",
@@ -19,6 +19,7 @@
     "@types/ssh2": "^1.15.6",
     "electron": "^44.7.2",
     "electron-builder": "^26.15.3",
+    "marked": "^18.1.1",
     "typescript": "^7.0.2"
   },
   "dependencies": {
@@ -57,7 +58,8 @@
       "!**/LICENSE*",
       "!**/*.markdown",
       "!**/test/**",
-      "!**/*.ts"
+      "!**/*.ts",
+      "docs/images/**/*"
     ],
     "mac": {
       "category": "public.app-category.developer-tools",

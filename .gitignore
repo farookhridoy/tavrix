@@ -4,3 +4,4 @@ dist/
 *.log
 .env
 release/
+src/renderer/manual.html
