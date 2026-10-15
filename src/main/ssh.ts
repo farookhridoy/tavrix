@@ -1,5 +1,6 @@
 import { Client, ClientChannel, SFTPWrapper, FileEntryWithStats, utils } from 'ssh2';
 import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { promises as fsp } from 'node:fs';
 import { posix, join as pathJoin, basename } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -15,9 +16,37 @@ export class KeyPassphraseError extends Error {
   }
 }
 
+/** `~` and `~/x` mean the home folder, as in a shell; the file APIs do not do this themselves. */
+export function expandHome(path: string): string {
+  return path === '~' || path.startsWith('~/') ? homedir() + path.slice(1) : path;
+}
+
+export type KeyFileInfo =
+  | { kind: 'private'; type: string }
+  | { kind: 'private-encrypted' }
+  | { kind: 'public' }
+  | { kind: 'invalid'; message: string };
+
+/** What a chosen file is, without ever returning its contents: a usable private key, an encrypted one, a public key, or something else. */
+export function inspectKeyFile(path: string): KeyFileInfo {
+  let data: Buffer;
+  try {
+    data = readFileSync(expandHome(path));
+  } catch (err) {
+    return { kind: 'invalid', message: (err as NodeJS.ErrnoException).code === 'ENOENT' ? 'File not found' : `Cannot read the file: ${(err as Error).message}` };
+  }
+  if (data.length > 64 * 1024) return { kind: 'invalid', message: 'This file is too large to be an SSH key' };
+  const parsed = utils.parseKey(data);
+  if (parsed instanceof Error) {
+    return /no passphrase given/i.test(parsed.message) ? { kind: 'private-encrypted' } : { kind: 'invalid', message: 'This does not look like an SSH key file' };
+  }
+  const key = Array.isArray(parsed) ? parsed[0] : parsed;
+  return key.isPrivateKey() ? { kind: 'private', type: key.type } : { kind: 'public' };
+}
+
 /** Read and validate a private key file, distinguishing a missing/wrong passphrase from an unreadable key. */
 export function loadPrivateKey(path: string, passphrase?: string): Buffer {
-  const data = readFileSync(path);
+  const data = readFileSync(expandHome(path));
   const parsed = utils.parseKey(data, passphrase || undefined);
   if (!(parsed instanceof Error)) return data;
   if (/no passphrase given/i.test(parsed.message)) throw new KeyPassphraseError('required');

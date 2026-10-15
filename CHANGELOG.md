@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.0
+- **Browse… button for the private key** in the session dialog: pick the key file instead of typing its path. The file window opens in `~/.ssh` with hidden files shown.
+- The chosen file is checked and described right below the field: a private key, an encrypted private key (you will be asked for its passphrase), a public `.pub` file (flagged: choose the private one), or not a key. Key contents are never sent to the window.
+- Fix: a key path typed as `~/.ssh/id_ed25519` now works (the `~` shorthand used to fail with "file not found").
+
 ## 1.4.2
 - A visible **⚙ Settings** button in the sidebar header (next to + and Import). Settings was only reachable from the menu bar (Tavrix > Settings…, Cmd+,), which was hard to find. The menu item and shortcut still work and are now covered by a test that drives the real menu.
 

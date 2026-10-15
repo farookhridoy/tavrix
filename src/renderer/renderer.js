@@ -857,6 +857,7 @@ function openSessionDialog(p) {
   $('f-port').value = p ? p.port : 22;
   $('f-user').value = p ? p.username : '';
   $('f-key').value = p?.privateKeyPath ?? '';
+  showKeyHint();
   $('f-pass').placeholder = p?.hasSecret ? 'Saved; leave blank to keep it' : 'Password (or key passphrase)';
   jump.value = p?.jumpHostId ?? '';
   $('f-keepalive').value = p?.keepAliveSec ?? '';
@@ -891,6 +892,29 @@ function readSessionForm() {
     terminal: readTerminalFields('ft'),
   };
 }
+
+/** Say what the chosen key file is, so a wrong pick (a .pub file, a random file) is caught before connecting. */
+async function showKeyHint() {
+  const hint = $('f-keyhint');
+  const path = $('f-key').value.trim();
+  hint.className = 'hint';
+  hint.textContent = '';
+  if (!path) return;
+  const info = await window.api.keys.inspect(path);
+  if ($('f-key').value.trim() !== path) return; // the field changed while we were asking
+  if (info.kind === 'private') { hint.className = 'hint good'; hint.textContent = `✓ ${info.type} private key`; }
+  else if (info.kind === 'private-encrypted') { hint.className = 'hint good'; hint.textContent = '✓ Encrypted private key: you will be asked for its passphrase'; }
+  else if (info.kind === 'public') { hint.className = 'hint warn'; hint.textContent = 'This is a public key (.pub). Choose the matching private key file.'; }
+  else { hint.className = 'hint bad'; hint.textContent = info.message; }
+}
+
+function applyPickedKey(path) {
+  if (!path) return;
+  $('f-key').value = path;
+  showKeyHint();
+}
+$('f-keybrowse').onclick = async () => applyPickedKey(await window.api.keys.pick());
+$('f-key').addEventListener('change', showKeyHint);
 
 $('new').onclick = () => openSessionDialog(null);
 $('f-cancel').onclick = () => $('dlg').close();

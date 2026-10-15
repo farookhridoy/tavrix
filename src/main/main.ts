@@ -1,9 +1,9 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, Menu, IpcMainInvokeEvent, MenuItemConstructorOptions } from 'electron';
 import { join } from 'node:path';
 import { homedir, userInfo } from 'node:os';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { Session, ConnectRequest, Progress, KeyPassphraseError, JumpHostError, Hop, FileStat } from './ssh';
+import { Session, ConnectRequest, Progress, KeyPassphraseError, JumpHostError, Hop, FileStat, inspectKeyFile } from './ssh';
 import type { ForwardSpec } from './forwards';
 import { parseSshConfig } from './sshconfig';
 import {
@@ -386,6 +386,20 @@ function registerIpc(): void {
     if (pendingUpdate) saveSettings({ skippedVersion: pendingUpdate.latest });
     pendingUpdate = null;
   });
+
+  // Choose a private key file. Opens in ~/.ssh with hidden files shown; only the path goes back to the page.
+  ipcMain.handle('keys:pick', async (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender);
+    const ssh = join(homedir(), '.ssh');
+    const opts = {
+      title: 'Choose a private key',
+      defaultPath: existsSync(ssh) ? ssh : homedir(),
+      properties: ['openFile', 'showHiddenFiles'] as ('openFile' | 'showHiddenFiles')[],
+    };
+    const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
+    return r.canceled ? null : (r.filePaths[0] ?? null);
+  });
+  ipcMain.handle('keys:inspect', (_e, path: string) => inspectKeyFile(String(path ?? '')));
 
   ipcMain.handle('settings:get', () => ({ ...getSettings(), defaults: { terminal: DEFAULT_TERMINAL, connection: DEFAULT_CONNECTION } }));
   ipcMain.handle('settings:set', (_e, patch: { terminal?: unknown; connection?: unknown }) => {

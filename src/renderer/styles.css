@@ -117,3 +117,10 @@ dialog code { background: #1e1e1e; padding: 0 4px; border-radius: 3px; }
 #sessionList li.folder { cursor: pointer; color: #9cdcfe; font-weight: 600; padding: 5px 10px 3px; justify-content: flex-start; gap: 6px; }
 #sessionList li.folder small { color: #666; font-weight: 400; display: inline; }
 #sessionList li.indent { padding-left: 22px; }
+
+.keyrow { display: flex; gap: 6px; }
+.keyrow input { flex: 1; min-width: 0; }
+#f-keyhint { min-height: 15px; font-size: 12px; color: #888; margin-top: -4px; }
+#f-keyhint.good { color: #4ec9b0; }
+#f-keyhint.warn { color: #e5c07b; }
+#f-keyhint.bad { color: #f48771; }

@@ -11,6 +11,10 @@ contextBridge.exposeInMainWorld('api', {
     start: (id: string, spec: unknown) => ipcRenderer.invoke('fwd:start', id, spec),
     stop: (id: string, fwdId: string) => ipcRenderer.invoke('fwd:stop', id, fwdId),
   },
+  keys: {
+    pick: () => ipcRenderer.invoke('keys:pick'),
+    inspect: (path: string) => ipcRenderer.invoke('keys:inspect', path),
+  },
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),
     set: (patch: unknown) => ipcRenderer.invoke('settings:set', patch),
