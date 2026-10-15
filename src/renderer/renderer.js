@@ -1101,7 +1101,7 @@ window.api.update.onAvailable((info) => {
 });
 $('updDownload').onclick = () => window.api.update.open('download');
 $('updNotes').onclick = () => window.api.update.open('notes');
-$('updLater').onclick = () => { $('update').hidden = true; };
+$('updLater').onclick = async () => { await window.api.update.later(); $('update').hidden = true; };
 $('updSkip').onclick = async () => { await window.api.update.skip(); $('update').hidden = true; };
 
 loadProfiles();

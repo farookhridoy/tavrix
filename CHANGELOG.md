@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.1
+- Update notice: Tavrix now also looks for a new release when you come back to its window (at most once an hour). Before, it only checked at launch and every 12 hours, so a release published while the app was already open went unnoticed.
+- **Later** now stays dismissed for that version until you restart the app or choose **Check for Updates…**; a still newer release is announced as usual.
+- The first window focus at launch no longer triggers a second, duplicate check.
+
 ## 1.5.0
 - **Browse… button for the private key** in the session dialog: pick the key file instead of typing its path. The file window opens in `~/.ssh` with hidden files shown.
 - The chosen file is checked and described right below the field: a private key, an encrypted private key (you will be asked for its passphrase), a public `.pub` file (flagged: choose the private one), or not a key. Key contents are never sent to the window.
