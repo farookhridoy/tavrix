@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0
+- Packaging with electron-builder: universal `.dmg` (arm64 + x86_64), app icon, trimmed bundle (only the Monaco files needed at runtime).
+- Signing/notarization configured via environment variables (`npm run dist:release`); see docs/RELEASING.md.
+- ssh2's optional native crypto addon is excluded so the universal build works; ssh2 uses its JS fallback.
+
 ## 0.3.0
 - File manager: upload/download files and folders with progress, drag and drop upload, new folder, rename, chmod, recursive delete (confirmation required; symlinks are removed, never followed; deleting `/` is refused).
 - Overwrite prompts for existing destinations; symlinks are skipped in transfers.

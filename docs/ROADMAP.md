@@ -13,16 +13,17 @@
 - [x] Import ~/.ssh/config
 - [x] Multiple tabs, unsaved-change warning in the editor
 
-## v0.3.0 (current): file manager
+## v0.3.0: file manager
 - [x] Upload/download of files and folders with progress; drag and drop upload
 - [x] Rename, delete (recursive), mkdir, chmod
 - [x] Monaco editor with syntax highlighting, Cmd+S to save
 - [ ] Cancel a running transfer (deferred)
 - [ ] Prompt for a password at connect time (deferred)
 
-## v0.4.0: packaging
-- [ ] electron-builder universal .dmg, signing and notarization
-- [ ] Auto-update
+## v0.4.0 (current): packaging
+- [x] electron-builder universal .dmg (Apple Silicon + Intel), app icon
+- [x] Hardened runtime, entitlements and notarization config (needs Apple Developer credentials; untested)
+- [ ] Auto-update (deferred: needs signed app and a reachable release feed)
 
 ## v1.0+: power features
 - [ ] Port forwarding UI, jump hosts, split panes, snippets, plugins

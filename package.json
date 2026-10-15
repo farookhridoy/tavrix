@@ -1,6 +1,6 @@
 {
   "name": "tavrix",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Tavrix: an SSH terminal with a remote file browser and editor for macOS",
   "main": "dist/main/main.js",
   "private": true,
@@ -9,12 +9,16 @@
     "build": "tsc -p tsconfig.json",
     "start": "npm run build && electron .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node --test dist/main/sshconfig.test.js dist/main/ssh.test.js dist/main/sftp.integration.test.js"
+    "test": "npm run build && node --test dist/main/sshconfig.test.js dist/main/ssh.test.js dist/main/sftp.integration.test.js",
+    "dist": "npm run build && electron-builder --mac --universal",
+    "dist:dir": "npm run build && electron-builder --mac --dir",
+    "dist:release": "npm run build && electron-builder --mac --universal -c.mac.notarize=true"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
     "@types/ssh2": "^1.15.6",
     "electron": "^44.7.2",
+    "electron-builder": "^26.15.3",
     "typescript": "^7.0.2"
   },
   "dependencies": {
@@ -22,5 +26,52 @@
     "@xterm/xterm": "^6.0.0",
     "monaco-editor": "0.52.2",
     "ssh2": "^1.17.0"
+  },
+  "author": "Tavrix contributors",
+  "build": {
+    "appId": "app.tavrix.desktop",
+    "productName": "Tavrix",
+    "copyright": "Copyright © 2026 Tavrix contributors",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/main/**/*.js",
+      "!dist/main/**/*.test.js",
+      "src/renderer/**/*",
+      "node_modules/@xterm/xterm/lib/xterm.js",
+      "node_modules/@xterm/xterm/css/xterm.css",
+      "node_modules/@xterm/addon-fit/lib/addon-fit.js",
+      "node_modules/monaco-editor/min/vs/**/*",
+      "!node_modules/monaco-editor/min/vs/**/nls.messages.*.js",
+      "package.json",
+      "!node_modules/monaco-editor/{dev,esm}/**",
+      "!node_modules/@xterm/*/{src,out}/**",
+      "!**/*.map",
+      "!**/*.d.ts",
+      "!node_modules/ssh2/lib/protocol/crypto/build/**",
+      "!node_modules/cpu-features/**"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icon.icns",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
+    },
+    "dmg": {
+      "title": "Tavrix ${version}"
+    },
+    "npmRebuild": false
   }
 }
