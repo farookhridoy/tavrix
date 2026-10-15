@@ -4,6 +4,8 @@ export interface ConfigHost {
   port: number;
   username: string;
   privateKeyPath?: string;
+  /** Raw ProxyJump value (an alias or user@host[:port]; comma-separated for several hops). */
+  proxyJump?: string;
 }
 
 /** Parse the concrete (non-wildcard) Host blocks of an OpenSSH client config. */
@@ -20,6 +22,7 @@ export function parseSshConfig(text: string, home: string, defaultUser = ''): Co
         port: current.port ?? 22,
         username: current.username ?? defaultUser,
         privateKeyPath: current.privateKeyPath,
+        proxyJump: current.proxyJump,
       });
     }
     aliases = [];
@@ -42,6 +45,7 @@ export function parseSshConfig(text: string, home: string, defaultUser = ''): Co
       if (key === 'hostname') current.host = value;
       else if (key === 'user') current.username = value;
       else if (key === 'port') current.port = Number(value) || 22;
+      else if (key === 'proxyjump') current.proxyJump = value.toLowerCase() === 'none' ? undefined : value;
       else if (key === 'identityfile' && !current.privateKeyPath) {
         current.privateKeyPath = value.replace(/^~(?=\/|$)/, home);
       }

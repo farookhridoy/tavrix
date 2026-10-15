@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.0
+- Port forwarding: local (-L), remote (-R) and dynamic SOCKS5 (-D) tunnels per connection, from the Tunnels button. Listening on anything other than loopback asks for confirmation.
+- Jump hosts (ProxyJump): pick another saved session to pass through, including chains (max 5; cycles refused). Each hop's host key is verified. Jump hosts use their saved credentials. `~/.ssh/config` imports single-alias ProxyJump entries.
+- Split panes: several terminals per connection, side by side or stacked; typing `exit` closes only that pane.
+- Snippets: saved commands inserted into the focused terminal. Multi-line snippets are pasted (bracketed paste) so nothing runs until you press Enter, unless the snippet is set to run immediately.
+- Edit saved sessions (keeps the saved secret if the field is left blank).
+- Fix: uploads and downloads now keep file permissions, so an executable script stays executable (uploads used to arrive as 644).
+- 18 automated tests, including tunnels, SOCKS5, jump hosts and multi-shell against a real SSH server.
+
 ## 0.5.0
 - Password or key passphrase is asked for at connect time when it isn't saved, and asked again if wrong. Secrets typed there are not stored, and passwords keep leading/trailing spaces.
 - Encrypted private keys are validated up front, so "needs passphrase" and "wrong passphrase" are distinct from "unreadable key".

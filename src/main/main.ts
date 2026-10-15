@@ -3,7 +3,8 @@ import { join } from 'node:path';
 import { homedir, userInfo } from 'node:os';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { Session, ConnectRequest, Progress, KeyPassphraseError } from './ssh';
+import { Session, ConnectRequest, Progress, KeyPassphraseError, JumpHostError, Hop } from './ssh';
+import type { ForwardSpec } from './forwards';
 import { parseSshConfig } from './sshconfig';
 import {
   Profile,
@@ -14,12 +15,18 @@ import {
   readSecret,
   knownFingerprint,
   trustHost,
+  listSnippets,
+  saveSnippet,
+  deleteSnippet,
+  Snippet,
 } from './store';
 
 const sessions = new Map<string, Session>();
 
 interface ConnectInput extends Partial<ConnectRequest> {
   profileId?: string;
+  /** Saved session to pass through first, for an unsaved connection. */
+  jumpHostId?: string;
   /** Password or key passphrase typed at connect time; never persisted. */
   secret?: string;
 }
@@ -65,6 +72,7 @@ function readProfileSecret(id: string): string | undefined {
 
 /** Turn "we need a secret from the user" failures into a marker the renderer can act on. */
 function classifyConnectError(err: unknown, req: ConnectRequest): Error {
+  if (err instanceof JumpHostError) return err; // a jump host problem is never a prompt for the destination's secret
   const msg = err instanceof Error ? err.message : String(err);
   if (err instanceof KeyPassphraseError) {
     return new Error(`${NEEDS_SECRET}:passphrase${err.reason === 'wrong' ? ':Wrong passphrase' : ''}`);
@@ -73,6 +81,21 @@ function classifyConnectError(err: unknown, req: ConnectRequest): Error {
     return new Error(`${NEEDS_SECRET}:password${req.password ? ':Authentication failed' : ''}`);
   }
   return err instanceof Error ? err : new Error(msg);
+}
+
+/** Hops to traverse before the destination, outermost first. Jump hosts use their saved credentials. */
+function jumpHops(win: BrowserWindow | null, input: ConnectInput): Hop[] {
+  const hops: Hop[] = [];
+  const seen = new Set<string>(input.profileId ? [input.profileId] : []);
+  let id = input.profileId ? getProfile(input.profileId)?.jumpHostId : input.jumpHostId;
+  while (id) {
+    if (seen.has(id) || seen.size > 5) throw new Error('The jump host chain is circular or longer than 5 hops');
+    seen.add(id);
+    const req = resolveRequest({ profileId: id });
+    hops.unshift({ req, verify: hostVerifier(win, req.host, req.port) });
+    id = profileBase(id).jumpHostId;
+  }
+  return hops;
 }
 
 function hostVerifier(win: BrowserWindow | null, host: string, port: number) {
@@ -126,31 +149,38 @@ function publicProfile(p: Profile) {
 }
 
 function registerIpc(): void {
-  ipcMain.handle('ssh:connect', async (e, input: ConnectInput, cols: number, rows: number) => {
+  ipcMain.handle('ssh:connect', async (e, input: ConnectInput) => {
     const req = resolveRequest(input);
     const id = randomUUID();
     const session = new Session();
     const win = BrowserWindow.fromWebContents(e.sender);
     try {
-      await session.connect(req, hostVerifier(win, req.host, req.port));
+      await session.connect(req, hostVerifier(win, req.host, req.port), jumpHops(win, input));
     } catch (err) {
-      session.close();
       throw classifyConnectError(err, req);
     }
-    await session.openShell(
-      cols,
-      rows,
-      (d) => e.sender.send('ssh:data', id, d),
-      () => {
-        sessions.delete(id);
-        e.sender.send('ssh:closed', id);
-      },
-    );
     sessions.set(id, session);
+    session.onDisconnect(() => {
+      if (sessions.delete(id)) e.sender.send('ssh:closed', id);
+    });
     return { id, home: await session.realpath('.') };
   });
-  ipcMain.on('ssh:write', (_e, id: string, data: string) => sessions.get(id)?.write(data));
-  ipcMain.on('ssh:resize', (_e, id: string, cols: number, rows: number) => sessions.get(id)?.resize(cols, rows));
+  ipcMain.handle('ssh:open-shell', (e, id: string, cols: number, rows: number) => {
+    const session = get(id);
+    return session.openShell(
+      cols,
+      rows,
+      (shellId, d) => e.sender.send('ssh:data', id, shellId, d),
+      (shellId) => {
+        e.sender.send('ssh:shell-closed', id, shellId);
+        // Typing `exit` in the last shell ends the session, as before split panes existed.
+        if (session.shellCount() === 0) session.close();
+      },
+    );
+  });
+  ipcMain.on('ssh:write', (_e, id: string, shellId: string, data: string) => sessions.get(id)?.write(shellId, data));
+  ipcMain.on('ssh:resize', (_e, id: string, shellId: string, cols: number, rows: number) => sessions.get(id)?.resize(shellId, cols, rows));
+  ipcMain.on('ssh:close-shell', (_e, id: string, shellId: string) => sessions.get(id)?.closeShell(shellId));
   ipcMain.handle('sftp:list', (_e, id: string, path: string) => get(id).list(path));
   ipcMain.handle('sftp:read', (_e, id: string, path: string) => get(id).readFile(path));
   ipcMain.handle('sftp:write', (_e, id: string, path: string, content: string) => get(id).writeFile(path, content));
@@ -211,11 +241,52 @@ function registerIpc(): void {
     sessions.delete(id);
   });
 
+  ipcMain.handle('fwd:list', (_e, id: string) => get(id).forwards.list());
+  ipcMain.handle('fwd:start', async (e, id: string, raw: ForwardSpec) => {
+    const spec: ForwardSpec = {
+      kind: raw.kind,
+      bindHost: String(raw.bindHost || '127.0.0.1'),
+      bindPort: Number(raw.bindPort),
+      destHost: raw.destHost ? String(raw.destHost) : undefined,
+      destPort: raw.destPort ? Number(raw.destPort) : undefined,
+    };
+    if (!['local', 'remote', 'dynamic'].includes(spec.kind)) throw new Error('Unknown tunnel type');
+    const loopback = ['127.0.0.1', 'localhost', '::1'].includes(spec.bindHost);
+    if (spec.kind !== 'remote' && !loopback) {
+      const win = BrowserWindow.fromWebContents(e.sender);
+      const opts = {
+        type: 'warning' as const,
+        message: `Listen on ${spec.bindHost}?`,
+        detail: 'Anyone who can reach this Mac on that address will be able to use the tunnel.',
+        buttons: ['Listen', 'Cancel'],
+        defaultId: 1,
+        cancelId: 1,
+      };
+      const r = win ? await dialog.showMessageBox(win, opts) : await dialog.showMessageBox(opts);
+      if (r.response !== 0) throw new Error('Cancelled');
+    }
+    return get(id).forwards.start(spec);
+  });
+  ipcMain.handle('fwd:stop', (_e, id: string, fwdId: string) => get(id).forwards.stop(fwdId));
+
+  ipcMain.handle('snippets:list', () => listSnippets());
+  ipcMain.handle('snippets:save', (_e, sn: Partial<Snippet>) => {
+    if (!sn.name || !sn.text) throw new Error('A snippet needs a name and text');
+    const snippet: Snippet = { id: sn.id ?? randomUUID(), name: String(sn.name), text: String(sn.text), run: Boolean(sn.run) };
+    saveSnippet(snippet);
+    return snippet.id;
+  });
+  ipcMain.handle('snippets:delete', (_e, id: string) => deleteSnippet(id));
+
   ipcMain.handle('profiles:list', () => listProfiles().map(publicProfile));
   ipcMain.handle(
     'profiles:save',
     (_e, p: Omit<Profile, 'id' | 'secret'> & { id?: string }, secret?: string) => {
       const profile: Profile = { ...p, id: p.id ?? randomUUID() };
+      if (profile.jumpHostId && (profile.jumpHostId === profile.id || !getProfile(profile.jumpHostId))) {
+        throw new Error('Choose a different saved session as the jump host');
+      }
+      if (!profile.jumpHostId) delete profile.jumpHostId;
       saveProfile(profile, secret || undefined);
       return profile.id;
     },
@@ -231,7 +302,8 @@ function registerIpc(): void {
     const existing = new Set(listProfiles().map((p) => `${p.username}@${p.host}:${p.port}`));
     let added = 0;
     let skipped = 0;
-    for (const h of parseSshConfig(text, homedir(), userInfo().username)) {
+    const hosts = parseSshConfig(text, homedir(), userInfo().username);
+    for (const h of hosts) {
       const key = `${h.username}@${h.host}:${h.port}`;
       if (existing.has(key)) {
         skipped++;
@@ -248,7 +320,21 @@ function registerIpc(): void {
       existing.add(key);
       added++;
     }
-    return { added, skipped };
+    // Second pass, once every host has a profile: link ProxyJump aliases (single hop only).
+    let jumpsLinked = 0;
+    let jumpsUnresolved = 0;
+    for (const h of hosts) {
+      if (!h.proxyJump) continue;
+      const me = listProfiles().find((p) => p.name === h.alias);
+      const target = h.proxyJump.includes(',') ? undefined : listProfiles().find((p) => p.name === h.proxyJump);
+      if (!me || !target || target.id === me.id || me.jumpHostId) {
+        if (!me?.jumpHostId) jumpsUnresolved++;
+        continue;
+      }
+      saveProfile({ ...me, jumpHostId: target.id });
+      jumpsLinked++;
+    }
+    return { added, skipped, jumpsLinked, jumpsUnresolved };
   });
 }
 

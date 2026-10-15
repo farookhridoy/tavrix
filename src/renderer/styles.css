@@ -31,7 +31,12 @@ input[type=text], input:not([type]), input[type=password], input[type=number] { 
 .files li { padding: 3px 10px; cursor: pointer; white-space: nowrap; }
 .files li:hover { background: #333; }
 .work { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-.term { flex: 1; padding: 4px; min-height: 0; }
+.terms { flex: 1; display: flex; min-height: 0; }
+.terms.row { flex-direction: row; }
+.terms.col { flex-direction: column; }
+.tpane { flex: 1; min-width: 0; min-height: 0; padding: 4px; }
+.terms .tpane + .tpane { border-left: 1px solid #333; }
+.terms.col .tpane + .tpane { border-left: 0; border-top: 1px solid #333; }
 .editor { flex: 1; display: flex; flex-direction: column; border-top: 1px solid #333; }
 .editor[hidden] { display: none; }
 .editbar { display: flex; gap: 8px; align-items: center; padding: 4px 8px; background: #252525; }
@@ -59,3 +64,25 @@ dialog .row { display: flex; justify-content: flex-end; gap: 8px; }
 #menu div { padding: 5px 14px; cursor: pointer; }
 #menu div:hover { background: #094771; }
 #menu hr { border: 0; border-top: 1px solid #444; margin: 4px 0; }
+
+select, textarea { background: #1e1e1e; color: #ddd; border: 1px solid #444; padding: 5px 7px; border-radius: 4px; font: inherit; }
+textarea { font-family: Menlo, monospace; font-size: 12px; resize: vertical; }
+dialog label select { display: block; width: 100%; margin-top: 4px; }
+.sb { font-size: 12px; padding: 1px 7px; }
+#snippetList { list-style: none; margin: 0; padding: 0; overflow: auto; max-height: 30%; }
+#snippetList li { padding: 4px 10px; cursor: pointer; display: flex; justify-content: space-between; gap: 6px; }
+#snippetList li:hover { background: #333; }
+#snippetList li .tools { visibility: hidden; display: flex; gap: 2px; }
+#snippetList li:hover .tools { visibility: visible; }
+#sessionList li .tools { visibility: hidden; display: flex; gap: 2px; }
+#sessionList li:hover .tools { visibility: visible; }
+#fwd { width: 520px; }
+#fwdList { list-style: none; margin: 0 0 10px; padding: 0; max-height: 180px; overflow: auto; }
+#fwdList li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid #3a3a3a; font-size: 12px; }
+#fwdList li.empty { color: #888; border: 0; }
+#fwdForm { display: flex; flex-direction: column; gap: 8px; }
+#fwdForm .two { display: flex; gap: 8px; }
+#fwdForm .two input { flex: 1; min-width: 0; }
+#fwdMsg { color: #f48771; min-height: 16px; font-size: 12px; }
+#snip { width: 460px; }
+#snipForm { display: flex; flex-direction: column; gap: 8px; }

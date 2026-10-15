@@ -9,6 +9,8 @@ export interface Profile {
   port: number;
   username: string;
   privateKeyPath?: string;
+  /** Saved session to pass through first (ProxyJump). */
+  jumpHostId?: string;
   /** base64 of safeStorage-encrypted password/passphrase (macOS Keychain-backed). */
   secret?: string;
 }
@@ -70,4 +72,24 @@ export function trustHost(host: string, port: number, fingerprint: string): void
   const all = load<KnownHosts>('known_hosts.json', {});
   all[`${host}:${port}`] = fingerprint;
   save('known_hosts.json', all);
+}
+
+export interface Snippet {
+  id: string;
+  name: string;
+  text: string;
+  /** Press Enter after inserting the text. Off by default so nothing runs unseen. */
+  run: boolean;
+}
+
+export function listSnippets(): Snippet[] {
+  return load<Snippet[]>('snippets.json', []);
+}
+
+export function saveSnippet(s: Snippet): void {
+  save('snippets.json', [...listSnippets().filter((x) => x.id !== s.id), s]);
+}
+
+export function deleteSnippet(id: string): void {
+  save('snippets.json', listSnippets().filter((x) => x.id !== id));
 }

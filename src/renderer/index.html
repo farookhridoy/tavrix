@@ -16,6 +16,11 @@
         <span><button id="new" title="New connection">+</button><button id="import" title="Import ~/.ssh/config">Import</button></span>
       </div>
       <ul id="sessionList"></ul>
+      <div class="head">
+        <strong>Snippets</strong>
+        <span><button id="newSnippet" title="New snippet">+</button></span>
+      </div>
+      <ul id="snippetList"></ul>
       <div id="notice"></div>
     </aside>
     <div id="content">
@@ -27,12 +32,16 @@
   <dialog id="dlg">
     <form id="form">
       <h3 id="dlgTitle">New connection</h3>
+      <input id="f-id" type="hidden" />
       <input id="f-name" placeholder="Name (optional)" />
       <input id="f-host" placeholder="Host" required />
       <input id="f-port" type="number" value="22" />
       <input id="f-user" placeholder="Username" required />
       <input id="f-pass" type="password" placeholder="Password (or key passphrase)" />
       <input id="f-key" placeholder="Private key path (optional)" />
+      <label>Jump host (connect through another saved session)
+        <select id="f-jump"><option value="">None</option></select>
+      </label>
       <label><input id="f-save" type="checkbox" checked /> Save this session (secret stored encrypted with macOS Keychain)</label>
       <div class="row"><button type="button" id="f-cancel">Cancel</button><button id="f-go">Connect</button></div>
     </form>
@@ -43,6 +52,38 @@
       <h3 id="askTitle"></h3>
       <input id="askInput" autocomplete="off" />
       <div class="row"><button type="button" id="askCancel">Cancel</button><button id="askOk">OK</button></div>
+    </form>
+  </dialog>
+  <dialog id="fwd">
+    <h3>Tunnels</h3>
+    <ul id="fwdList"></ul>
+    <form id="fwdForm">
+      <select id="fwdKind">
+        <option value="local">Local (-L): a port on this Mac → a host reached through the server</option>
+        <option value="remote">Remote (-R): a port on the server → a host reached from this Mac</option>
+        <option value="dynamic">Dynamic (-D): SOCKS5 proxy on this Mac, out through the server</option>
+      </select>
+      <div class="two">
+        <input id="fwdBindHost" value="127.0.0.1" title="Address to listen on" />
+        <input id="fwdBindPort" type="number" min="0" max="65535" placeholder="Listen port (0 = any)" />
+      </div>
+      <div class="two" id="fwdDest">
+        <input id="fwdDestHost" placeholder="Destination host" />
+        <input id="fwdDestPort" type="number" min="1" max="65535" placeholder="Destination port" />
+      </div>
+      <div id="fwdMsg"></div>
+      <div class="row"><button type="button" id="fwdClose">Close</button><button>Start tunnel</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="snip">
+    <form id="snipForm">
+      <h3 id="snipTitle">New snippet</h3>
+      <input id="s-id" type="hidden" />
+      <input id="s-name" placeholder="Name" required />
+      <textarea id="s-text" rows="6" placeholder="Command or text to insert" required></textarea>
+      <label><input id="s-run" type="checkbox" /> Press Enter after inserting (runs it immediately)</label>
+      <div class="row"><button type="button" id="s-cancel">Cancel</button><button>Save</button></div>
     </form>
   </dialog>
   <div id="menu" hidden></div>

@@ -2,6 +2,9 @@ import { Client, ClientChannel, SFTPWrapper, FileEntryWithStats, utils } from 's
 import { readFileSync } from 'node:fs';
 import { promises as fsp } from 'node:fs';
 import { posix, join as pathJoin, basename } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import type { Duplex } from 'node:stream';
+import { Forwards } from './forwards';
 
 /** The private key is encrypted and needs a passphrase ('required'), or the one given did not decrypt it ('wrong'). */
 export class KeyPassphraseError extends Error {
@@ -56,51 +59,125 @@ export type OnProgress = (p: Progress) => void;
 /** Asked once per top-level item that already exists at the destination. */
 export type ConfirmOverwrite = (name: string) => Promise<boolean>;
 
+/** One hop to pass through before the final host (OpenSSH ProxyJump). */
+export interface Hop {
+  req: ConnectRequest;
+  verify: (sha256Hex: string) => Promise<boolean>;
+}
+
+/** A failure on a jump host rather than the destination; never a prompt-for-secret case. */
+export class JumpHostError extends Error {
+  constructor(hop: ConnectRequest, cause: unknown) {
+    super(`Jump host ${hop.username}@${hop.host}:${hop.port}: ${cause instanceof Error ? cause.message : String(cause)}`);
+    this.name = 'JumpHostError';
+  }
+}
+
+function connectClient(
+  client: Client,
+  req: ConnectRequest,
+  verifyHost: (sha256Hex: string) => Promise<boolean>,
+  sock?: Duplex,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    client.once('ready', () => resolve());
+    client.once('error', reject);
+    client.connect({
+      host: req.host,
+      port: req.port,
+      username: req.username,
+      password: req.password,
+      privateKey: req.privateKeyPath ? loadPrivateKey(req.privateKeyPath, req.passphrase) : undefined,
+      passphrase: req.passphrase,
+      sock,
+      readyTimeout: 20000,
+      hostHash: 'sha256',
+      // ssh2 uses the callback when the function returns undefined.
+      hostVerifier: ((hash: string, cb: (ok: boolean) => void): undefined => {
+        verifyHost(hash).then(cb, () => cb(false));
+      }) as unknown as (hash: string) => boolean,
+    });
+  });
+}
+
 export class Session {
   private client = new Client();
-  private shell?: ClientChannel;
+  private jumpClients: Client[] = [];
+  private shells = new Map<string, ClientChannel>();
   private sftpHandle?: SFTPWrapper;
   private cancelled = false;
+  readonly forwards = new Forwards(this.client);
 
-  connect(req: ConnectRequest, verifyHost: (sha256Hex: string) => Promise<boolean>): Promise<void> {
+  /** Connect to req, passing through each hop in order (outermost first). */
+  async connect(req: ConnectRequest, verifyHost: Hop['verify'], jumps: Hop[] = []): Promise<void> {
+    const chain: Hop[] = [...jumps, { req, verify: verifyHost }];
+    let via: Client | undefined;
+    try {
+      for (let i = 0; i < chain.length; i++) {
+        const hop = chain[i];
+        const last = i === chain.length - 1;
+        const client = last ? this.client : new Client();
+        if (!last) this.jumpClients.push(client);
+        try {
+          const sock = via ? await this.openChannel(via, hop.req) : undefined;
+          await connectClient(client, hop.req, hop.verify, sock);
+        } catch (err) {
+          throw last ? err : new JumpHostError(hop.req, err);
+        }
+        via = client;
+      }
+    } catch (err) {
+      this.close();
+      throw err;
+    }
+  }
+
+  private openChannel(via: Client, to: ConnectRequest): Promise<Duplex> {
     return new Promise((resolve, reject) => {
-      this.client.once('ready', () => resolve());
-      this.client.once('error', reject);
-      this.client.connect({
-        host: req.host,
-        port: req.port,
-        username: req.username,
-        password: req.password,
-        privateKey: req.privateKeyPath ? loadPrivateKey(req.privateKeyPath, req.passphrase) : undefined,
-        passphrase: req.passphrase,
-        readyTimeout: 20000,
-        hostHash: 'sha256',
-        // ssh2 uses the callback when the function returns undefined.
-        hostVerifier: ((hash: string, cb: (ok: boolean) => void): undefined => {
-          verifyHost(hash).then(cb, () => cb(false));
-        }) as unknown as (hash: string) => boolean,
-      });
+      via.forwardOut('127.0.0.1', 0, to.host, to.port, (err, channel) => (err ? reject(err) : resolve(channel)));
     });
   }
 
-  openShell(cols: number, rows: number, onData: (d: string) => void, onClose: () => void): Promise<void> {
+  /** Called once if the connection to the destination ends (dropped or closed). */
+  onDisconnect(cb: () => void): void {
+    this.client.once('close', cb);
+  }
+
+  openShell(
+    cols: number,
+    rows: number,
+    onData: (shellId: string, d: string) => void,
+    onClose: (shellId: string) => void,
+  ): Promise<string> {
     return new Promise((resolve, reject) => {
       this.client.shell({ term: 'xterm-256color', cols, rows }, (err, stream) => {
         if (err) return reject(err);
-        this.shell = stream;
-        stream.on('data', (d: Buffer) => onData(d.toString('utf8')));
-        stream.on('close', onClose);
-        resolve();
+        const id = randomUUID();
+        this.shells.set(id, stream);
+        stream.on('data', (d: Buffer) => onData(id, d.toString('utf8')));
+        stream.on('close', () => {
+          this.shells.delete(id);
+          onClose(id);
+        });
+        resolve(id);
       });
     });
   }
 
-  write(data: string): void {
-    this.shell?.write(data);
+  shellCount(): number {
+    return this.shells.size;
   }
 
-  resize(cols: number, rows: number): void {
-    this.shell?.setWindow(rows, cols, 0, 0);
+  write(shellId: string, data: string): void {
+    this.shells.get(shellId)?.write(data);
+  }
+
+  resize(shellId: string, cols: number, rows: number): void {
+    this.shells.get(shellId)?.setWindow(rows, cols, 0, 0);
+  }
+
+  closeShell(shellId: string): void {
+    this.shells.get(shellId)?.close();
   }
 
   private sftp(): Promise<SFTPWrapper> {
@@ -180,7 +257,7 @@ export class Session {
   }
 
   private async transferAll(
-    plan: { src: string; dst: string; dir: boolean; size: number }[],
+    plan: { src: string; dst: string; dir: boolean; size: number; mode?: number }[],
     kind: 'up' | 'down',
     onProgress: OnProgress,
   ): Promise<TransferResult> {
@@ -202,10 +279,12 @@ export class Session {
       const base = done;
       try {
         await this.call<void>((s, cb) => {
-          const opts = { step: (t: number) => onProgress({ name, done: base + t, total }) };
+          const opts = { step: (t: number) => onProgress({ name, done: base + t, total }), mode: p.mode };
           if (kind === 'up') s.fastPut(p.src, p.dst, opts, (e) => cb(e));
           else s.fastGet(p.src, p.dst, opts, (e) => cb(e));
         });
+        // fastGet creates local files with default permissions; keep the remote ones (e.g. an executable script).
+        if (kind === 'down' && p.mode !== undefined) await fsp.chmod(p.dst, p.mode);
       } catch (err) {
         if (!this.cancelled) throw err;
         // Cancelled mid-file: the SFTP channel was closed, so remove the partial destination.
@@ -234,14 +313,14 @@ export class Session {
     onProgress: OnProgress,
     confirmOverwrite: ConfirmOverwrite,
   ): Promise<TransferResult> {
-    const plan: { src: string; dst: string; dir: boolean; size: number }[] = [];
+    const plan: { src: string; dst: string; dir: boolean; size: number; mode?: number }[] = [];
     const walk = async (src: string, dst: string): Promise<void> => {
       const st = await fsp.lstat(src);
       if (st.isDirectory()) {
         plan.push({ src, dst, dir: true, size: 0 });
         for (const n of await fsp.readdir(src)) await walk(pathJoin(src, n), posix.join(dst, n));
       } else if (st.isFile()) {
-        plan.push({ src, dst, dir: false, size: st.size });
+        plan.push({ src, dst, dir: false, size: st.size, mode: st.mode & 0o777 });
       }
     };
     for (const local of locals) {
@@ -259,14 +338,14 @@ export class Session {
     onProgress: OnProgress,
     confirmOverwrite: ConfirmOverwrite,
   ): Promise<TransferResult> {
-    const plan: { src: string; dst: string; dir: boolean; size: number }[] = [];
+    const plan: { src: string; dst: string; dir: boolean; size: number; mode?: number }[] = [];
     const walk = async (src: string, dst: string): Promise<void> => {
       const st = await this.call<import('ssh2').Stats>((s, cb) => s.lstat(src, cb));
       if (st.isDirectory()) {
         plan.push({ src, dst, dir: true, size: 0 });
         for (const c of await this.list(src)) await walk(posix.join(src, c.name), pathJoin(dst, c.name));
       } else if (st.isFile()) {
-        plan.push({ src, dst, dir: false, size: st.size });
+        plan.push({ src, dst, dir: false, size: st.size, mode: st.mode & 0o777 });
       }
     };
     for (const remote of remotes) {
@@ -302,6 +381,9 @@ export class Session {
   }
 
   close(): void {
+    void this.forwards.closeAll();
     this.client.end();
+    for (const c of this.jumpClients) c.end();
+    this.jumpClients = [];
   }
 }
