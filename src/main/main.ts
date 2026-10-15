@@ -172,6 +172,10 @@ function hostVerifier(win: BrowserWindow | null, host: string, port: number) {
 
 let pendingUpdate: UpdateInfo | null = null;
 const HOUR = 3600_000;
+/** When the last automatic check started; a window gaining focus re-checks if it has been a while. */
+let lastBackgroundCheck = 0;
+/** The version the user dismissed with "Later": not shown again until the app restarts or they check manually. */
+let laterVersion: string | null = null;
 
 /** Test hooks apply only to unpackaged runs, so a shipped app can only ever ask this project's GitHub feed. */
 const feedUrl = (): string => (!app.isPackaged && process.env.TAVRIX_UPDATE_URL) || FEED_URL;
@@ -183,9 +187,11 @@ function announceUpdate(): void {
 
 async function runUpdateCheck(manual: boolean): Promise<void> {
   if (!manual && !getSettings().updateCheck) return;
+  if (!manual) lastBackgroundCheck = Date.now();
+  else laterVersion = null; // asking explicitly always shows the result
   const r = await checkForUpdate(app.getVersion(), fetch as never, feedUrl());
   if (r.kind === 'available') {
-    if (!manual && getSettings().skippedVersion === r.info.latest) return;
+    if (!manual && (getSettings().skippedVersion === r.info.latest || laterVersion === r.info.latest)) return;
     pendingUpdate = r.info;
     announceUpdate();
     if (manual) BrowserWindow.getAllWindows()[0]?.focus();
@@ -203,7 +209,15 @@ async function runUpdateCheck(manual: boolean): Promise<void> {
   else await dialog.showMessageBox(opts);
 }
 
+const recheckAfterMs = (): number => Number(!app.isPackaged && process.env.TAVRIX_UPDATE_RECHECK_MS) || HOUR;
+
+/** Coming back to the window after a while: look again, so a release published since launch is noticed. */
+function recheckOnFocus(): void {
+  if (Date.now() - lastBackgroundCheck > recheckAfterMs()) void runUpdateCheck(false);
+}
+
 function scheduleUpdateChecks(): void {
+  lastBackgroundCheck = Date.now(); // the window's first focus at launch must not trigger a second check; the scheduled one runs shortly
   const first = Number(!app.isPackaged && process.env.TAVRIX_UPDATE_DELAY_MS) || 10_000;
   setTimeout(() => void runUpdateCheck(false), first);
   setInterval(() => void runUpdateCheck(false), 12 * HOUR).unref();
@@ -259,6 +273,7 @@ function createWindow(): BrowserWindow {
     },
   });
   win.loadFile(join(__dirname, '../../src/renderer/index.html'));
+  win.on('focus', recheckOnFocus);
   win.webContents.on('did-finish-load', announceUpdate); // a window opened after the check still gets the banner
   return win;
 }
@@ -381,6 +396,10 @@ function registerIpc(): void {
   ipcMain.handle('update:open', async (_e, kind: 'download' | 'notes') => {
     const url = openTarget(pendingUpdate, kind === 'notes' ? 'notes' : 'download');
     if (url) await shell.openExternal(url);
+  });
+  ipcMain.handle('update:later', () => {
+    laterVersion = pendingUpdate?.latest ?? null;
+    pendingUpdate = null;
   });
   ipcMain.handle('update:skip', () => {
     if (pendingUpdate) saveSettings({ skippedVersion: pendingUpdate.latest });

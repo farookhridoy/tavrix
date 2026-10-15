@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('api', {
   update: {
     open: (kind: 'download' | 'notes') => ipcRenderer.invoke('update:open', kind),
     skip: () => ipcRenderer.invoke('update:skip'),
+    later: () => ipcRenderer.invoke('update:later'),
     onAvailable: (cb: (info: { current: string; latest: string; notes: string }) => void) =>
       ipcRenderer.on('update:available', (_e, info) => cb(info)),
   },

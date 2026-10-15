@@ -17,7 +17,7 @@ The **⚙ button** in the sidebar (or **Tavrix menu > Settings…**, Cmd+,) sets
 - Editor: Cmd+S saves; **Auto-save** is optional. If the file changed on the server meanwhile, Tavrix reloads a clean editor, warns a dirty one, and asks before overwriting. New files are created `644`; a script starting with `#!` gets a **Make executable** button (or use right-click > Permissions). Binary, non-UTF-8 and files over 5 MB are not opened as text.
 
 ## Updates
-Tavrix tells you when a newer version is published: a bar appears with **Download**, **Release notes**, **Later** and **Skip this version**. It only opens the download page in your browser; it never installs anything itself. Use the **Tavrix menu > Check for Updates…** at any time, or untick **Check for Updates Automatically** to stop the background check.
+Tavrix tells you when a newer version is published (it checks at launch, every 12 hours, and when you come back to the window after an hour): a bar appears with **Download**, **Release notes**, **Later** and **Skip this version**. It only opens the download page in your browser; it never installs anything itself. Use the **Tavrix menu > Check for Updates…** at any time, or untick **Check for Updates Automatically** to stop the background check.
 
 **Privacy:** the only network request Tavrix makes on its own is that check: an anonymous `GET https://api.github.com/repos/farookhridoy/tavrix/releases/latest` (it sends the app version in the User-Agent, and GitHub sees your IP address). Everything else goes only to the servers you connect to.
 
