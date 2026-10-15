@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0
+- Password or key passphrase is asked for at connect time when it isn't saved, and asked again if wrong. Secrets typed there are not stored, and passwords keep leading/trailing spaces.
+- Encrypted private keys are validated up front, so "needs passphrase" and "wrong passphrase" are distinct from "unreadable key".
+- Transfers can be cancelled; an interrupted file is removed and the session stays usable.
+- `~/.ssh/config` hosts without a `User` use your local account name (as OpenSSH does); saved sessions with an empty username do too.
+- Release docs now cover notarization with a keychain profile.
+
 ## 0.4.0
 - Packaging with electron-builder: universal `.dmg` (arm64 + x86_64), app icon, trimmed bundle (only the Monaco files needed at runtime).
 - Signing/notarization configured via environment variables (`npm run dist:release`); see docs/RELEASING.md.

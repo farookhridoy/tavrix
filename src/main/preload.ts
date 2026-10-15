@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('api', {
   remove: (id: string, path: string) => ipcRenderer.invoke('sftp:remove', id, path),
   upload: (id: string, remoteDir: string, locals?: string[]) => ipcRenderer.invoke('xfer:upload', id, remoteDir, locals),
   download: (id: string, remotes: string[]) => ipcRenderer.invoke('xfer:download', id, remotes),
+  cancelTransfer: (id: string) => ipcRenderer.send('xfer:cancel', id),
   pathFor: (file: File) => webUtils.getPathForFile(file),
   onProgress: (cb: (id: string, p: { name: string; done: number; total: number }) => void) =>
     ipcRenderer.on('xfer:progress', (_e, id, p) => cb(id, p)),

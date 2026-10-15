@@ -20,13 +20,19 @@ const joinPath = (dir, name) => (dir === '/' ? '' : dir.replace(/\/$/, '')) + '/
 const parentPath = (p) => p.replace(/\/[^/]+\/?$/, '') || '/';
 const human = (n) => (n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : n < 1073741824 ? (n / 1048576).toFixed(1) + ' MB' : (n / 1073741824).toFixed(2) + ' GB');
 
-function ask(title, value = '') {
+function ask(title, value = '', { secret = false } = {}) {
   return new Promise((resolve) => {
     const dlg = $('ask');
     $('askTitle').textContent = title;
+    $('askInput').type = secret ? 'password' : 'text';
     $('askInput').value = value;
     let result = null;
-    $('askForm').onsubmit = (e) => { e.preventDefault(); result = $('askInput').value.trim(); dlg.close(); };
+    $('askForm').onsubmit = (e) => {
+      e.preventDefault();
+      const v = $('askInput').value;
+      result = secret ? v : v.trim(); // passwords may legitimately start or end with spaces
+      dlg.close();
+    };
     $('askCancel').onclick = () => dlg.close();
     dlg.onclose = () => resolve(result || null);
     dlg.showModal();
@@ -129,7 +135,10 @@ function createTab(title) {
   tab.progEl = el('progress');
   tab.progEl.hidden = true;
   tab.progEl.max = 1;
-  tab.statusEl.append(tab.msgEl, tab.progEl);
+  tab.cancelBtn = el('button', '', 'Cancel');
+  tab.cancelBtn.hidden = true;
+  tab.cancelBtn.onclick = () => { tab.cancelBtn.disabled = true; window.api.cancelTransfer(tab.sid); };
+  tab.statusEl.append(tab.msgEl, tab.progEl, tab.cancelBtn);
   work.append(tab.termEl, tab.editorEl, tab.statusEl);
   tab.pane.append(aside, work);
 
@@ -272,26 +281,40 @@ function deleteEntry(tab, e, full) {
 
 /* ---------- transfers ---------- */
 
-function transferDone(tab, verb, r) {
+function transferStart(tab, text) {
+  tab.msgEl.textContent = text;
+  tab.cancelBtn.disabled = false;
+  tab.cancelBtn.hidden = false;
+}
+
+function transferEnd(tab) {
   tab.progEl.hidden = true;
-  tab.msgEl.textContent = r ? `${verb} ${r.files} file${r.files === 1 ? '' : 's'} (${human(r.bytes)})` : 'Cancelled';
+  tab.cancelBtn.hidden = true;
+}
+
+function transferDone(tab, verb, r) {
+  transferEnd(tab);
+  if (!r) tab.msgEl.textContent = 'Cancelled';
+  else if (r.cancelled) tab.msgEl.textContent = `Transfer cancelled after ${r.files} file${r.files === 1 ? '' : 's'}; the interrupted file was removed`;
+  else tab.msgEl.textContent = `${verb} ${r.files} file${r.files === 1 ? '' : 's'} (${human(r.bytes)})`;
 }
 
 function upload(tab, paths) {
   if (!tab.sid) return;
   return guarded(tab, 'Upload', async () => {
-    tab.msgEl.textContent = 'Uploading...';
+    transferStart(tab, 'Uploading...');
     const r = await window.api.upload(tab.sid, tab.cwd, paths);
     transferDone(tab, 'Uploaded', r);
     if (r) await browse(tab, tab.cwd);
-  }).finally(() => { tab.progEl.hidden = true; });
+  }).finally(() => transferEnd(tab));
 }
 
 function download(tab, remotes) {
   return guarded(tab, 'Download', async () => {
+    transferStart(tab, 'Downloading...');
     const r = await window.api.download(tab.sid, remotes);
     transferDone(tab, 'Downloaded', r);
-  }).finally(() => { tab.progEl.hidden = true; });
+  }).finally(() => transferEnd(tab));
 }
 
 window.api.onProgress((id, p) => {
@@ -363,17 +386,33 @@ function closeEditor(tab, force = false) {
 async function connect(input, title) {
   const tab = createTab(title);
   tab.msgEl.textContent = 'Connecting...';
-  try {
-    const res = await window.api.connect(input, tab.term.cols, tab.term.rows);
-    tab.sid = res.id;
-    bySid.set(res.id, tab);
-    tab.msgEl.textContent = 'Connected';
-    refit(tab);
-    browse(tab, res.home);
-  } catch (err) {
-    tab.msgEl.textContent = 'Failed: ' + (err.message || err);
-    tab.term.write('\r\n\x1b[31mConnection failed:\x1b[0m ' + (err.message || err) + '\r\n');
+  let attempt = input;
+  for (let tries = 0; tries < 3; tries++) {
+    try {
+      const res = await window.api.connect(attempt, tab.term.cols, tab.term.rows);
+      tab.sid = res.id;
+      bySid.set(res.id, tab);
+      tab.msgEl.textContent = 'Connected';
+      refit(tab);
+      browse(tab, res.home);
+      return;
+    } catch (err) {
+      const text = String(err.message || err);
+      const m = /NEEDS_SECRET:(password|passphrase)(?::([^\n]*))?/.exec(text);
+      if (!m) return connectFailed(tab, text.replace(/^Error invoking remote method '[^']*': (Error: )?/, ''));
+      const what = m[1] === 'password' ? 'Password' : 'Key passphrase';
+      tab.msgEl.textContent = 'Waiting for ' + what.toLowerCase();
+      const secret = await ask(`${m[2] ? m[2] + '. ' : ''}${what} for ${title}`, '', { secret: true });
+      if (!secret) return connectFailed(tab, 'Cancelled');
+      attempt = { ...input, secret };
+    }
   }
+  connectFailed(tab, 'Authentication failed');
+}
+
+function connectFailed(tab, message) {
+  tab.msgEl.textContent = 'Failed: ' + message;
+  tab.term.write('\r\n\x1b[31mConnection failed:\x1b[0m ' + message + '\r\n');
 }
 
 window.api.onData((id, d) => bySid.get(id)?.term.write(d));
@@ -413,7 +452,6 @@ async function loadProfiles() {
 }
 
 function connectProfile(p) {
-  // Key-auth profiles from ssh_config have no stored secret; connect directly and let the key work.
   connect({ profileId: p.id }, p.name);
 }
 

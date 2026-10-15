@@ -12,19 +12,29 @@ An unsigned app is ad-hoc signed only. Built and run on the same Mac it opens no
 xattr -dr com.apple.quarantine /Applications/Tavrix.app
 ```
 
-## Signed and notarized (needs an Apple Developer account, not yet tested)
-1. Create a "Developer ID Application" certificate and export it as a `.p12`.
-2. Create an app-specific password for your Apple ID.
-3. Set these, then build:
+## Signed and notarized (Apple Developer account)
+One-time setup:
+1. Get a **Developer ID Application** certificate into your login keychain: Xcode > Settings > Accounts > select your team > Manage Certificates > + > Developer ID Application (or create it at developer.apple.com > Certificates; needs the Account Holder or Admin role). Check it with:
+   ```bash
+   security find-identity -v -p codesigning     # should list "Developer ID Application: Your Name (TEAMID)"
+   ```
+2. Create an app-specific password at appleid.apple.com > Sign-In and Security > App-Specific Passwords.
+3. Store notarization credentials in the keychain once (prompts for the password, so it never lands in shell history or a file):
+   ```bash
+   xcrun notarytool store-credentials "tavrix-notary" --apple-id you@example.com --team-id TEAMID
+   ```
+
+Each release:
 ```bash
-export CSC_LINK=/path/to/developer-id.p12     # or base64 of it
-export CSC_KEY_PASSWORD=...
-export APPLE_ID=you@example.com
-export APPLE_APP_SPECIFIC_PASSWORD=...
-export APPLE_TEAM_ID=XXXXXXXXXX
-npm run dist:release
+APPLE_KEYCHAIN_PROFILE=tavrix-notary npm run dist:release
 ```
-Hardened runtime and entitlements are already configured (`build/entitlements.mac.plist`). Verify with `spctl -a -vv release/mac-universal/Tavrix.app` and `xcrun stapler validate`.
+electron-builder finds the certificate in your keychain automatically, signs with the hardened runtime (`build/entitlements.mac.plist`), submits to Apple for notarization, and staples the ticket. Notarization usually takes a few minutes. Verify:
+```bash
+spctl -a -vv release/mac-universal/Tavrix.app          # source=Notarized Developer ID
+xcrun stapler validate release/Tavrix-<version>-universal.dmg
+```
+Status: configured but not yet run end to end, because no certificate was available when this was written.
+For CI, use `CSC_LINK` (base64 `.p12`), `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` instead of the keychain.
 
 ## Cutting a version
 1. Update `CHANGELOG.md` and `docs/ROADMAP.md`.

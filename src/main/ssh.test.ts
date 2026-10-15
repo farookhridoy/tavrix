@@ -38,3 +38,24 @@ test('fails authentication with a wrong password', async () => {
   await assert.rejects(s.connect(req(port, 'bad'), async () => true));
   server.close();
 });
+
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { loadPrivateKey, KeyPassphraseError } from './ssh';
+
+test('loadPrivateKey distinguishes missing and wrong passphrases from unreadable keys', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'tavrix-key-'));
+  const enc = join(dir, 'enc');
+  const plain = join(dir, 'plain');
+  const junk = join(dir, 'junk');
+  writeFileSync(enc, utils.generateKeyPairSync('ed25519', { passphrase: 'pw 1', cipher: 'aes256-ctr', rounds: 8 }).private);
+  writeFileSync(plain, utils.generateKeyPairSync('ed25519').private);
+  writeFileSync(junk, 'not a key');
+
+  assert.ok(loadPrivateKey(plain));
+  assert.ok(loadPrivateKey(enc, 'pw 1'));
+  assert.throws(() => loadPrivateKey(enc), (e) => e instanceof KeyPassphraseError && e.reason === 'required');
+  assert.throws(() => loadPrivateKey(enc, 'nope'), (e) => e instanceof KeyPassphraseError && e.reason === 'wrong');
+  assert.throws(() => loadPrivateKey(junk), (e) => !(e instanceof KeyPassphraseError) && /Cannot read private key/.test((e as Error).message));
+});

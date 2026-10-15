@@ -13,7 +13,7 @@ Host web db
   IdentityFile ~/.ssh/id_ed25519
 Host plain
 `;
-  const hosts = parseSshConfig(cfg, '/Users/me');
+  const hosts = parseSshConfig(cfg, '/Users/me', 'me');
   assert.deepEqual(hosts.map((h) => h.alias), ['web', 'db', 'plain']);
   assert.equal(hosts[0].host, '10.0.0.5');
   assert.equal(hosts[0].port, 2222);
@@ -21,4 +21,6 @@ Host plain
   assert.equal(hosts[0].privateKeyPath, '/Users/me/.ssh/id_ed25519');
   assert.equal(hosts[2].host, 'plain');
   assert.equal(hosts[2].port, 22);
+  assert.equal(hosts[2].username, 'me');
+  assert.equal(hosts[0].username, 'deploy');
 });

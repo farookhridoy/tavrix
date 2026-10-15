@@ -66,3 +66,30 @@ test('SFTP file operations against a real server', { skip }, async () => {
   }
   assert.ok(!existsSync(local));
 });
+
+test('cancelling an upload removes the partial file and keeps the session usable', { skip }, async () => {
+  const [host, port, username, privateKeyPath] = (target as string).split(':');
+  const s = new Session();
+  await s.connect({ host, port: Number(port), username, privateKeyPath }, async () => true);
+  const home = await s.realpath('.');
+  const root = `${home}/tavrix-cancel-${process.pid}`;
+  const local = mkdtempSync(join(tmpdir(), 'tavrix-cancel-'));
+  try {
+    await s.mkdir(root);
+    const big = join(local, 'big.bin');
+    writeFileSync(big, Buffer.alloc(300 * 1024 * 1024, 7));
+    const res = await s.upload([big], root, (p) => { if (p.done > 0 && p.done < p.total) s.cancelTransfer(); }, async () => true);
+    assert.equal(res.cancelled, true);
+    assert.equal(res.files, 0);
+    assert.equal(await s.exists(`${root}/big.bin`), false, 'partial file must be removed');
+    // the session still works, and a following transfer is not poisoned by the old cancel
+    writeFileSync(join(local, 'small.txt'), 'ok');
+    const again = await s.upload([join(local, 'small.txt')], root, () => {}, async () => true);
+    assert.equal(again.cancelled, false);
+    assert.equal(await s.readFile(`${root}/small.txt`), 'ok');
+  } finally {
+    await s.remove(root).catch(() => {});
+    rmSync(local, { recursive: true, force: true });
+    s.close();
+  }
+});

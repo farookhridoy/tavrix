@@ -1,7 +1,25 @@
-import { Client, ClientChannel, SFTPWrapper, FileEntryWithStats } from 'ssh2';
+import { Client, ClientChannel, SFTPWrapper, FileEntryWithStats, utils } from 'ssh2';
 import { readFileSync } from 'node:fs';
 import { promises as fsp } from 'node:fs';
 import { posix, join as pathJoin, basename } from 'node:path';
+
+/** The private key is encrypted and needs a passphrase ('required'), or the one given did not decrypt it ('wrong'). */
+export class KeyPassphraseError extends Error {
+  constructor(readonly reason: 'required' | 'wrong') {
+    super(reason === 'required' ? 'The private key is encrypted and needs a passphrase' : 'Wrong passphrase for the private key');
+    this.name = 'KeyPassphraseError';
+  }
+}
+
+/** Read and validate a private key file, distinguishing a missing/wrong passphrase from an unreadable key. */
+export function loadPrivateKey(path: string, passphrase?: string): Buffer {
+  const data = readFileSync(path);
+  const parsed = utils.parseKey(data, passphrase || undefined);
+  if (!(parsed instanceof Error)) return data;
+  if (/no passphrase given/i.test(parsed.message)) throw new KeyPassphraseError('required');
+  if (passphrase && /(bad passphrase|passphrase|decrypt)/i.test(parsed.message)) throw new KeyPassphraseError('wrong');
+  throw new Error(`Cannot read private key ${path}: ${parsed.message}`);
+}
 
 export interface ConnectRequest {
   host: string;
@@ -28,6 +46,12 @@ export interface Progress {
   total: number;
 }
 
+export interface TransferResult {
+  files: number;
+  bytes: number;
+  cancelled: boolean;
+}
+
 export type OnProgress = (p: Progress) => void;
 /** Asked once per top-level item that already exists at the destination. */
 export type ConfirmOverwrite = (name: string) => Promise<boolean>;
@@ -36,6 +60,7 @@ export class Session {
   private client = new Client();
   private shell?: ClientChannel;
   private sftpHandle?: SFTPWrapper;
+  private cancelled = false;
 
   connect(req: ConnectRequest, verifyHost: (sha256Hex: string) => Promise<boolean>): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -46,7 +71,7 @@ export class Session {
         port: req.port,
         username: req.username,
         password: req.password,
-        privateKey: req.privateKeyPath ? readFileSync(req.privateKeyPath) : undefined,
+        privateKey: req.privateKeyPath ? loadPrivateKey(req.privateKeyPath, req.passphrase) : undefined,
         passphrase: req.passphrase,
         readyTimeout: 20000,
         hostHash: 'sha256',
@@ -84,6 +109,9 @@ export class Session {
       this.client.sftp((err, s) => {
         if (err) return reject(err);
         this.sftpHandle = s;
+        s.once('close', () => {
+          if (this.sftpHandle === s) this.sftpHandle = undefined;
+        });
         resolve(s);
       });
     });
@@ -155,11 +183,13 @@ export class Session {
     plan: { src: string; dst: string; dir: boolean; size: number }[],
     kind: 'up' | 'down',
     onProgress: OnProgress,
-  ): Promise<{ files: number; bytes: number }> {
+  ): Promise<TransferResult> {
+    this.cancelled = false;
     const total = plan.reduce((n, p) => n + p.size, 0);
     let done = 0;
     let files = 0;
     for (const p of plan) {
+      if (this.cancelled) break;
       const name = basename(kind === 'up' ? p.src : p.dst);
       if (p.dir) {
         if (kind === 'up') {
@@ -170,16 +200,31 @@ export class Session {
         continue;
       }
       const base = done;
-      await this.call<void>((s, cb) => {
-        const opts = { step: (t: number) => onProgress({ name, done: base + t, total }) };
-        if (kind === 'up') s.fastPut(p.src, p.dst, opts, (e) => cb(e));
-        else s.fastGet(p.src, p.dst, opts, (e) => cb(e));
-      });
+      try {
+        await this.call<void>((s, cb) => {
+          const opts = { step: (t: number) => onProgress({ name, done: base + t, total }) };
+          if (kind === 'up') s.fastPut(p.src, p.dst, opts, (e) => cb(e));
+          else s.fastGet(p.src, p.dst, opts, (e) => cb(e));
+        });
+      } catch (err) {
+        if (!this.cancelled) throw err;
+        // Cancelled mid-file: the SFTP channel was closed, so remove the partial destination.
+        if (kind === 'down') await fsp.rm(p.dst, { force: true });
+        else await this.remove(p.dst).catch(() => {});
+        break;
+      }
       done += p.size;
       files++;
       onProgress({ name, done, total });
     }
-    return { files, bytes: done };
+    return { files, bytes: done, cancelled: this.cancelled };
+  }
+
+  /** Abort the running transfer: stop after the current file and close the SFTP channel to interrupt it. */
+  cancelTransfer(): void {
+    this.cancelled = true;
+    this.sftpHandle?.end();
+    this.sftpHandle = undefined;
   }
 
   /** Upload local files/folders into remoteDir. Symlinks are skipped. */
@@ -188,7 +233,7 @@ export class Session {
     remoteDir: string,
     onProgress: OnProgress,
     confirmOverwrite: ConfirmOverwrite,
-  ): Promise<{ files: number; bytes: number }> {
+  ): Promise<TransferResult> {
     const plan: { src: string; dst: string; dir: boolean; size: number }[] = [];
     const walk = async (src: string, dst: string): Promise<void> => {
       const st = await fsp.lstat(src);
@@ -213,7 +258,7 @@ export class Session {
     localDir: string,
     onProgress: OnProgress,
     confirmOverwrite: ConfirmOverwrite,
-  ): Promise<{ files: number; bytes: number }> {
+  ): Promise<TransferResult> {
     const plan: { src: string; dst: string; dir: boolean; size: number }[] = [];
     const walk = async (src: string, dst: string): Promise<void> => {
       const st = await this.call<import('ssh2').Stats>((s, cb) => s.lstat(src, cb));

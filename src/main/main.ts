@@ -1,9 +1,9 @@
 import { app, BrowserWindow, ipcMain, dialog, IpcMainInvokeEvent } from 'electron';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
+import { homedir, userInfo } from 'node:os';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { Session, ConnectRequest, Progress } from './ssh';
+import { Session, ConnectRequest, Progress, KeyPassphraseError } from './ssh';
 import { parseSshConfig } from './sshconfig';
 import {
   Profile,
@@ -20,7 +20,12 @@ const sessions = new Map<string, Session>();
 
 interface ConnectInput extends Partial<ConnectRequest> {
   profileId?: string;
+  /** Password or key passphrase typed at connect time; never persisted. */
+  secret?: string;
 }
+
+/** Marker the renderer matches to ask the user for a password/passphrase and retry. */
+const NEEDS_SECRET = 'NEEDS_SECRET';
 
 function get(id: string): Session {
   const s = sessions.get(id);
@@ -33,29 +38,41 @@ function toBase64(hex: string): string {
 }
 
 function resolveRequest(input: ConnectInput): ConnectRequest {
-  if (input.profileId) {
-    const p = getProfile(input.profileId);
-    if (!p) throw new Error('Saved session not found');
-    const secret = readSecret(p);
-    return {
-      host: p.host,
-      port: p.port,
-      username: p.username,
-      privateKeyPath: p.privateKeyPath,
-      password: p.privateKeyPath ? undefined : secret,
-      passphrase: p.privateKeyPath ? secret : undefined,
-    };
-  }
-  const { host, port, username, password, privateKeyPath } = input;
-  if (!host || !username) throw new Error('Host and username are required');
+  const base = input.profileId ? profileBase(input.profileId) : input;
+  const { host, port, username, privateKeyPath } = base;
+  if (!host) throw new Error('Host is required');
+  const secret = input.secret ?? input.password ?? (input.profileId ? readProfileSecret(input.profileId) : undefined);
   return {
     host,
     port: port || 22,
-    username,
+    // Like OpenSSH, default to the local account name when none is configured.
+    username: username || userInfo().username,
     privateKeyPath: privateKeyPath || undefined,
-    password: privateKeyPath ? undefined : password,
-    passphrase: privateKeyPath ? password : undefined,
+    password: privateKeyPath ? undefined : secret,
+    passphrase: privateKeyPath ? secret : undefined,
   };
+}
+
+function profileBase(id: string): Profile {
+  const p = getProfile(id);
+  if (!p) throw new Error('Saved session not found');
+  return p;
+}
+
+function readProfileSecret(id: string): string | undefined {
+  return readSecret(profileBase(id));
+}
+
+/** Turn "we need a secret from the user" failures into a marker the renderer can act on. */
+function classifyConnectError(err: unknown, req: ConnectRequest): Error {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (err instanceof KeyPassphraseError) {
+    return new Error(`${NEEDS_SECRET}:passphrase${err.reason === 'wrong' ? ':Wrong passphrase' : ''}`);
+  }
+  if (!req.privateKeyPath && /all configured authentication methods failed/i.test(msg)) {
+    return new Error(`${NEEDS_SECRET}:password${req.password ? ':Authentication failed' : ''}`);
+  }
+  return err instanceof Error ? err : new Error(msg);
 }
 
 function hostVerifier(win: BrowserWindow | null, host: string, port: number) {
@@ -114,7 +131,12 @@ function registerIpc(): void {
     const id = randomUUID();
     const session = new Session();
     const win = BrowserWindow.fromWebContents(e.sender);
-    await session.connect(req, hostVerifier(win, req.host, req.port));
+    try {
+      await session.connect(req, hostVerifier(win, req.host, req.port));
+    } catch (err) {
+      session.close();
+      throw classifyConnectError(err, req);
+    }
     await session.openShell(
       cols,
       rows,
@@ -171,6 +193,7 @@ function registerIpc(): void {
     }
     return get(id).upload(paths, remoteDir, progressSender(e, id), overwriteAsker(win));
   });
+  ipcMain.on('xfer:cancel', (_e, id: string) => sessions.get(id)?.cancelTransfer());
   ipcMain.handle('xfer:download', async (e, id: string, remotes: string[]) => {
     const win = BrowserWindow.fromWebContents(e.sender);
     const opts = {
@@ -208,7 +231,7 @@ function registerIpc(): void {
     const existing = new Set(listProfiles().map((p) => `${p.username}@${p.host}:${p.port}`));
     let added = 0;
     let skipped = 0;
-    for (const h of parseSshConfig(text, homedir())) {
+    for (const h of parseSshConfig(text, homedir(), userInfo().username)) {
       const key = `${h.username}@${h.host}:${h.port}`;
       if (existing.has(key)) {
         skipped++;
