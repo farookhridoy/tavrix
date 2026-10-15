@@ -1,6 +1,6 @@
 {
   "name": "tavrix",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Tavrix: an SSH terminal with a remote file browser and editor for macOS",
   "main": "dist/main/main.js",
   "private": true,
@@ -10,8 +10,8 @@
     "start": "npm run build && electron .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && node --test dist/main/*.test.js",
-    "dist": "npm run build && electron-builder --mac && node scripts/shrink-dmg.mjs",
-    "dist:dir": "npm run build && electron-builder --mac --dir",
+    "dist": "npm run build && electron-builder --mac -c.mac.identity=- -c.mac.hardenedRuntime=false && node scripts/shrink-dmg.mjs",
+    "dist:dir": "npm run build && electron-builder --mac --dir -c.mac.identity=- -c.mac.hardenedRuntime=false",
     "dist:release": "npm run build && electron-builder --mac -c.mac.notarize=true"
   },
   "devDependencies": {

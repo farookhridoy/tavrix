@@ -7,7 +7,7 @@ CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist
 ```
 Output: `release/Tavrix-<version>-arm64.dmg` (Apple Silicon) and `-x64.dmg` (Intel), about 90 MB each. A final step (`scripts/shrink-dmg.mjs`) re-compresses them with LZMA. `npm run dist:dir` builds only an unpacked `.app` for your own CPU, which is faster for testing.
 
-An unsigned app is ad-hoc signed only. Built and run on the same Mac it opens normally. If you download it from elsewhere, macOS Gatekeeper blocks it; allow it with right-click > Open, or:
+An unsigned app is ad-hoc signed (`-c.mac.identity=-`, without hardened runtime, which would block loading Electron's own libraries). This re-signing step is required: trimming Electron's languages after packaging otherwise leaves a broken seal and macOS can report the downloaded app as damaged. Check with `codesign --verify --deep --strict release/mac-arm64/Tavrix.app`. Built and run on the same Mac it opens normally. If you download it from elsewhere, macOS Gatekeeper blocks it; allow it with right-click > Open, or:
 ```bash
 xattr -dr com.apple.quarantine /Applications/Tavrix.app
 ```
