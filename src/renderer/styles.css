@@ -86,3 +86,5 @@ dialog label select { display: block; width: 100%; margin-top: 4px; }
 #fwdMsg { color: #f48771; min-height: 16px; font-size: 12px; }
 #snip { width: 460px; }
 #snipForm { display: flex; flex-direction: column; gap: 8px; }
+
+.editbar label.auto { color: #aaa; font-size: 12px; white-space: nowrap; display: flex; align-items: center; gap: 4px; }

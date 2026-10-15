@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.0
+- New file button and right-click entry: creates an empty `0644` file, opens it, and refuses to overwrite an existing one.
+- Auto-save (checkbox in the editor bar, off by default, remembered): saves 1.5 s after you stop typing. If the file changed on the server it pauses and tells you rather than overwriting.
+- Change detection: size and modification time (seconds) are recorded when a file is opened or saved. When the window regains focus, a clean editor reloads a changed file, a dirty editor is warned, and a deleted file is reported. Saving a changed file asks before overwriting. A Reload button takes the server version.
+- "Make executable" button appears when a file starts with `#!` and has no executable bit.
+- Fix: a file is no longer opened as text if it is binary, not valid UTF-8, or over 5 MB; saving such a file would have corrupted it.
+- Known limits: a change within the same second that keeps the same size is not detected; the check and the write are separate calls, so a change landing between them is still possible.
+
 ## 1.0.0
 - Port forwarding: local (-L), remote (-R) and dynamic SOCKS5 (-D) tunnels per connection, from the Tunnels button. Listening on anything other than loopback asks for confirmation.
 - Jump hosts (ProxyJump): pick another saved session to pass through, including chains (max 5; cycles refused). Each hop's host key is verified. Jump hosts use their saved credentials. `~/.ssh/config` imports single-alias ProxyJump entries.

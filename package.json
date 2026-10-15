@@ -1,6 +1,6 @@
 {
   "name": "tavrix",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Tavrix: an SSH terminal with a remote file browser and editor for macOS",
   "main": "dist/main/main.js",
   "private": true,

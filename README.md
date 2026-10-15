@@ -1,6 +1,6 @@
 # Tavrix
 
-An SSH workbench for macOS: terminal, remote file browser and editor in one window. v1.0.0.
+An SSH workbench for macOS: terminal, remote file browser and editor in one window. v1.1.0.
 
 ## Run
 ```bash
@@ -11,7 +11,7 @@ Click + for a new connection (optionally through a jump host) (password, or priv
 
 ## Also
 - **Split** the terminal (status bar), **Tunnels** for -L/-R/-D forwarding, **Snippets** in the sidebar.
-- Saving a file in the editor is manual (Cmd+S) and overwrites the server copy; new files are created `644`. Make a script executable with right-click > Permissions (`755`) or `chmod +x`.
+- Editor: Cmd+S saves; **Auto-save** is optional. If the file changed on the server meanwhile, Tavrix reloads a clean editor, warns a dirty one, and asks before overwriting. New files are created `644`; a script starting with `#!` gets a **Make executable** button (or use right-click > Permissions). Binary, non-UTF-8 and files over 5 MB are not opened as text.
 
 ## Build an installer
 ```bash
