@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Session } from './ssh';
@@ -47,6 +47,15 @@ test('SFTP file operations against a real server', { skip }, async () => {
     await s.chmod(`${root}/renamed.txt`, 0o600);
     const renamed = (await s.list(root)).find((e) => e.name === 'renamed.txt');
     assert.equal(renamed?.mode, 0o600);
+
+    // executable scripts keep their executable bit in both directions
+    writeFileSync(join(local, 'run.sh'), '#!/bin/bash\necho ok\n', { mode: 0o755 });
+    await s.upload([join(local, 'run.sh')], root, () => {}, async () => true);
+    assert.equal((await s.list(root)).find((e) => e.name === 'run.sh')?.mode, 0o755, 'upload keeps 755');
+    const dest0 = mkdtempSync(join(tmpdir(), 'tavrix-dl0-'));
+    await s.download([`${root}/run.sh`], dest0, () => {}, async () => true);
+    assert.equal(statSync(join(dest0, 'run.sh')).mode & 0o777, 0o755, 'download keeps 755');
+    rmSync(dest0, { recursive: true });
 
     // download the folder back
     const dest = mkdtempSync(join(tmpdir(), 'tavrix-dl-'));

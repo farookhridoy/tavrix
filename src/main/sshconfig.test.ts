@@ -24,3 +24,10 @@ Host plain
   assert.equal(hosts[2].username, 'me');
   assert.equal(hosts[0].username, 'deploy');
 });
+
+test('parses ProxyJump values and treats "none" as unset', () => {
+  const hosts = parseSshConfig('Host inner\n  ProxyJump bastion\nHost chain\n  ProxyJump a,b\nHost direct\n  ProxyJump none\n', '/h', 'me');
+  assert.equal(hosts.find((h) => h.alias === 'inner')?.proxyJump, 'bastion');
+  assert.equal(hosts.find((h) => h.alias === 'chain')?.proxyJump, 'a,b');
+  assert.equal(hosts.find((h) => h.alias === 'direct')?.proxyJump, undefined);
+});

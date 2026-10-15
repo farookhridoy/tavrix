@@ -25,11 +25,22 @@
 - [x] Hardened runtime, entitlements and notarization config (needs Apple Developer credentials; untested)
 - [ ] Auto-update (deferred: needs signed app and a reachable release feed)
 
-## v0.5.0 (current): rough edges
+## v0.5.0: rough edges
 - [x] Password / key-passphrase prompt at connect time (retry on wrong, never stored)
 - [x] Cancel a running upload/download (partial file removed)
 - [x] `~/.ssh/config` hosts without `User` default to your local account name
 - [ ] Signed + notarized release build (needs the Developer ID certificate on the build Mac)
 
-## v1.0+: power features
-- [ ] Port forwarding UI, jump hosts, split panes, snippets, plugins
+## v1.0.0 (current): power features
+- [x] Port forwarding UI: local (-L), remote (-R), dynamic SOCKS5 (-D)
+- [x] Jump hosts (ProxyJump): chains of saved sessions; `~/.ssh/config` ProxyJump (single alias) imported
+- [x] Split terminal panes (side by side or stacked), each its own shell on the same connection
+- [x] Snippets (multi-line text is pasted, not executed, unless "Press Enter" is on)
+- [x] Edit saved sessions
+- [x] Uploads and downloads keep the executable bit
+
+## Next
+- [ ] New file button; auto-save option; warn when a file changed on the server since it was opened
+- [ ] Saved tunnels that start with a session; prompt for jump-host secrets
+- [ ] Nested split layouts; mixed row/column
+- [ ] Auto-update (needs a signed app), plugins

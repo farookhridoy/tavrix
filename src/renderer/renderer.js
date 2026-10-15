@@ -120,7 +120,9 @@ function createTab(title) {
     ]);
   });
   const work = el('div', 'work');
-  tab.termEl = el('div', 'term');
+  tab.termEl = el('div', 'terms row');
+  tab.panes = [];
+  tab.focused = null;
   tab.editorEl = el('div', 'editor');
   tab.editorEl.hidden = true;
   const bar = el('div', 'editbar');
@@ -138,14 +140,16 @@ function createTab(title) {
   tab.cancelBtn = el('button', '', 'Cancel');
   tab.cancelBtn.hidden = true;
   tab.cancelBtn.onclick = () => { tab.cancelBtn.disabled = true; window.api.cancelTransfer(tab.sid); };
-  tab.statusEl.append(tab.msgEl, tab.progEl, tab.cancelBtn);
+  const sbtn = (label, title, fn) => { const b = el('button', 'sb', label); b.title = title; b.onclick = fn; return b; };
+  tab.statusEl.append(
+    tab.msgEl, tab.progEl, tab.cancelBtn,
+    sbtn('Split →', 'Split the terminal side by side', () => splitPane(tab, 'row')),
+    sbtn('Split ↓', 'Split the terminal top and bottom', () => splitPane(tab, 'col')),
+    sbtn('Close pane', 'Close the focused terminal pane', () => closePane(tab, tab.focused)),
+    sbtn('Tunnels', 'Port forwarding', () => openTunnels(tab)),
+  );
   work.append(tab.termEl, tab.editorEl, tab.statusEl);
   tab.pane.append(aside, work);
-
-  tab.term = new Terminal({ fontFamily: 'Menlo, monospace', fontSize: 13, cursorBlink: true });
-  tab.fit = new FitAddon.FitAddon();
-  tab.term.loadAddon(tab.fit);
-  tab.term.onData((d) => tab.sid && window.api.write(tab.sid, d));
 
   save.onclick = () => saveFile(tab);
   closeEdit.onclick = () => closeEditor(tab);
@@ -153,9 +157,61 @@ function createTab(title) {
   $('tabbar').appendChild(tab.header);
   $('panes').appendChild(tab.pane);
   tabs.push(tab);
-  tab.opened = false;
   activate(tab);
   return tab;
+}
+
+/* ---------- terminal panes ---------- */
+
+/** Add a terminal pane. With shell=false it is only a text area for messages (no remote shell). */
+async function addPane(tab, { shell = true } = {}) {
+  const pane = { el: el('div', 'tpane'), shellId: null };
+  pane.term = new Terminal({ fontFamily: 'Menlo, monospace', fontSize: 13, cursorBlink: true });
+  pane.fit = new FitAddon.FitAddon();
+  pane.term.loadAddon(pane.fit);
+  tab.termEl.appendChild(pane.el);
+  pane.term.open(pane.el);
+  pane.el.addEventListener('mousedown', () => { tab.focused = pane; });
+  pane.term.onData((d) => tab.sid && pane.shellId && window.api.write(tab.sid, pane.shellId, d));
+  tab.panes.push(pane);
+  tab.focused = pane;
+  refit(tab);
+  if (shell && tab.sid) {
+    try {
+      pane.shellId = await window.api.openShell(tab.sid, pane.term.cols, pane.term.rows);
+      refit(tab);
+      pane.term.focus();
+    } catch (err) {
+      pane.term.write('\r\n\x1b[31mCould not open a shell:\x1b[0m ' + (err.message || err) + '\r\n');
+    }
+  }
+  return pane;
+}
+
+function splitPane(tab, dir) {
+  if (!tab.sid) return;
+  tab.termEl.className = 'terms ' + dir; // one direction per tab: all panes sit in a row or a column
+  addPane(tab);
+}
+
+function removePane(tab, pane) {
+  pane.term.dispose();
+  pane.el.remove();
+  tab.panes.splice(tab.panes.indexOf(pane), 1);
+  if (tab.focused === pane) tab.focused = tab.panes[tab.panes.length - 1] || null;
+  refit(tab);
+}
+
+function closePane(tab, pane) {
+  if (!pane || tab.panes.length < 2) { tab.msgEl.textContent = 'This is the last terminal; close the tab instead'; return; }
+  if (tab.sid && pane.shellId) window.api.closeShell(tab.sid, pane.shellId);
+  removePane(tab, pane);
+}
+
+function paneByShell(sid, shellId) {
+  const tab = bySid.get(sid);
+  const pane = tab && tab.panes.find((p) => p.shellId === shellId);
+  return { tab, pane };
 }
 
 function activate(tab) {
@@ -164,15 +220,16 @@ function activate(tab) {
     t.header.classList.toggle('active', t === tab);
     t.pane.classList.toggle('active', t === tab);
   }
-  if (!tab.opened) { tab.term.open(tab.termEl); tab.opened = true; }
   requestAnimationFrame(() => refit(tab));
 }
 
 function refit(tab) {
-  try {
-    tab.fit.fit();
-    if (tab.sid) window.api.resize(tab.sid, tab.term.cols, tab.term.rows);
-  } catch { /* pane hidden */ }
+  for (const pane of tab.panes) {
+    try {
+      pane.fit.fit();
+      if (tab.sid && pane.shellId) window.api.resize(tab.sid, pane.shellId, pane.term.cols, pane.term.rows);
+    } catch { /* pane hidden */ }
+  }
 }
 
 function closeTab(tab) {
@@ -180,7 +237,7 @@ function closeTab(tab) {
   if (tab.sid) { window.api.disconnect(tab.sid); bySid.delete(tab.sid); }
   tab.editor?.dispose();
   tab.model?.dispose();
-  tab.term.dispose();
+  for (const pane of tab.panes) pane.term.dispose();
   tab.header.remove();
   tab.pane.remove();
   tabs.splice(tabs.indexOf(tab), 1);
@@ -389,12 +446,12 @@ async function connect(input, title) {
   let attempt = input;
   for (let tries = 0; tries < 3; tries++) {
     try {
-      const res = await window.api.connect(attempt, tab.term.cols, tab.term.rows);
+      const res = await window.api.connect(attempt);
       tab.sid = res.id;
       bySid.set(res.id, tab);
       tab.msgEl.textContent = 'Connected';
-      refit(tab);
       browse(tab, res.home);
+      await addPane(tab);
       return;
     } catch (err) {
       const text = String(err.message || err);
@@ -410,12 +467,20 @@ async function connect(input, title) {
   connectFailed(tab, 'Authentication failed');
 }
 
-function connectFailed(tab, message) {
+async function connectFailed(tab, message) {
   tab.msgEl.textContent = 'Failed: ' + message;
-  tab.term.write('\r\n\x1b[31mConnection failed:\x1b[0m ' + message + '\r\n');
+  const pane = tab.panes[0] || (await addPane(tab, { shell: false }));
+  pane.term.write('\r\n\x1b[31mConnection failed:\x1b[0m ' + message + '\r\n');
 }
 
-window.api.onData((id, d) => bySid.get(id)?.term.write(d));
+window.api.onData((id, shellId, d) => {
+  const { pane } = paneByShell(id, shellId);
+  pane?.term.write(d);
+});
+window.api.onShellClosed((id, shellId) => {
+  const { tab, pane } = paneByShell(id, shellId);
+  if (tab && pane && tab.panes.length > 1) removePane(tab, pane);
+});
 window.api.onClosed((id) => {
   const tab = bySid.get(id);
   if (!tab) return;
@@ -427,64 +492,221 @@ window.addEventListener('resize', () => active && refit(active));
 
 /* ---------- saved sessions ---------- */
 
+let profiles = [];
+
 async function loadProfiles() {
-  const list = await window.api.profiles.list();
+  profiles = (await window.api.profiles.list()).sort((a, b) => a.name.localeCompare(b.name));
   const ul = $('sessionList');
   ul.textContent = '';
-  for (const p of list.sort((a, b) => a.name.localeCompare(b.name))) {
+  for (const p of profiles) {
     const li = el('li');
     const info = el('div');
     info.append(el('div', '', p.name));
-    info.append(el('small', '', `${p.username}@${p.host}${p.port !== 22 ? ':' + p.port : ''}`));
+    const via = p.jumpHostId ? ' via ' + (profiles.find((x) => x.id === p.jumpHostId)?.name ?? '?') : '';
+    info.append(el('small', '', `${p.username}@${p.host}${p.port !== 22 ? ':' + p.port : ''}${via}`));
+    const tools = el('span', 'tools');
+    const edit = el('button', 'x', '✎');
+    edit.title = 'Edit saved session';
+    edit.onclick = (e) => { e.stopPropagation(); openSessionDialog(p); };
     const x = el('button', 'x', '×');
     x.title = 'Delete saved session';
     x.onclick = async (e) => {
       e.stopPropagation();
-      if (confirm('Delete saved session "' + p.name + '"?')) {
+      const users = profiles.filter((o) => o.jumpHostId === p.id).map((o) => o.name);
+      const warn = users.length ? `\n\n${users.join(', ')} use it as a jump host and will stop working.` : '';
+      if (confirm('Delete saved session "' + p.name + '"?' + warn)) {
         await window.api.profiles.remove(p.id);
         loadProfiles();
       }
     };
-    li.append(info, x);
-    li.onclick = () => connectProfile(p);
+    tools.append(edit, x);
+    li.append(info, tools);
+    li.onclick = () => connect({ profileId: p.id }, p.name);
     ul.appendChild(li);
   }
 }
 
-function connectProfile(p) {
-  connect({ profileId: p.id }, p.name);
-}
-
 $('import').onclick = async () => {
   const r = await window.api.profiles.importSshConfig();
-  note(`Imported ${r.added}, skipped ${r.skipped} existing.`);
+  let msg = `Imported ${r.added}, skipped ${r.skipped} existing.`;
+  if (r.jumpsLinked) msg += ` Linked ${r.jumpsLinked} ProxyJump.`;
+  if (r.jumpsUnresolved) msg += ` ${r.jumpsUnresolved} ProxyJump not linked (only single-hop aliases are supported).`;
+  note(msg);
   loadProfiles();
 };
 
-/* ---------- new connection dialog ---------- */
+/* ---------- new / edit connection dialog ---------- */
 
-$('new').onclick = () => { $('form').reset(); $('f-port').value = 22; $('dlg').showModal(); $('f-host').focus(); };
+function openSessionDialog(p) {
+  $('form').reset();
+  const jump = $('f-jump');
+  jump.textContent = '';
+  jump.append(new Option('None', ''));
+  for (const o of profiles) if (!p || o.id !== p.id) jump.append(new Option(`${o.name} (${o.username}@${o.host})`, o.id));
+  $('f-id').value = p ? p.id : '';
+  $('dlgTitle').textContent = p ? 'Edit session' : 'New connection';
+  $('f-go').textContent = p ? 'Save' : 'Connect';
+  $('f-save').checked = true;
+  $('f-save').parentElement.hidden = Boolean(p);
+  $('f-name').value = p ? p.name : '';
+  $('f-host').value = p ? p.host : '';
+  $('f-port').value = p ? p.port : 22;
+  $('f-user').value = p ? p.username : '';
+  $('f-key').value = p?.privateKeyPath ?? '';
+  $('f-pass').placeholder = p?.hasSecret ? 'Saved; leave blank to keep it' : 'Password (or key passphrase)';
+  jump.value = p?.jumpHostId ?? '';
+  $('dlg').showModal();
+  $('f-host').focus();
+}
+
+$('new').onclick = () => openSessionDialog(null);
 $('f-cancel').onclick = () => $('dlg').close();
 $('form').onsubmit = async (ev) => {
   ev.preventDefault();
+  const editing = $('f-id').value || undefined;
   const host = $('f-host').value.trim();
   const username = $('f-user').value.trim();
   const port = Number($('f-port').value) || 22;
   const password = $('f-pass').value;
   const privateKeyPath = $('f-key').value.trim() || undefined;
-  const name = $('f-name').value.trim() || `${username}@${host}`;
+  const jumpHostId = $('f-jump').value || undefined;
+  const name = $('f-name').value.trim() || `${username || 'me'}@${host}`;
   $('dlg').close();
   try {
-    if ($('f-save').checked) {
-      const id = await window.api.profiles.save({ name, host, port, username, privateKeyPath }, password || undefined);
-      loadProfiles();
-      connect({ profileId: id }, name);
+    if (editing || $('f-save').checked) {
+      const id = await window.api.profiles.save({ id: editing, name, host, port, username, privateKeyPath, jumpHostId }, password || undefined);
+      await loadProfiles();
+      if (!editing) connect({ profileId: id }, name);
     } else {
-      connect({ host, port, username, password, privateKeyPath }, name);
+      connect({ host, port, username, password, privateKeyPath, jumpHostId }, name);
     }
   } catch (err) {
     note('Could not save: ' + (err.message || err));
   }
 };
 
+/* ---------- tunnels ---------- */
+
+let tunnelTab = null;
+
+async function refreshTunnels() {
+  const ul = $('fwdList');
+  ul.textContent = '';
+  const list = tunnelTab?.sid ? await window.api.forwards.list(tunnelTab.sid) : [];
+  if (!list.length) ul.appendChild(el('li', 'empty', 'No tunnels running on this connection'));
+  for (const f of list) {
+    const li = el('li');
+    li.append(el('span', '', f.description));
+    const stop = el('button', '', 'Stop');
+    stop.onclick = async () => {
+      await window.api.forwards.stop(tunnelTab.sid, f.id);
+      refreshTunnels();
+    };
+    li.append(stop);
+    ul.appendChild(li);
+  }
+}
+
+function syncTunnelForm() {
+  const dynamic = $('fwdKind').value === 'dynamic';
+  $('fwdDest').hidden = dynamic;
+  $('fwdBindHost').title = $('fwdKind').value === 'remote' ? 'Address to listen on at the server' : 'Address to listen on on this Mac';
+}
+
+function openTunnels(tab) {
+  if (!tab.sid) { tab.msgEl.textContent = 'Connect first'; return; }
+  tunnelTab = tab;
+  $('fwdMsg').textContent = '';
+  syncTunnelForm();
+  refreshTunnels();
+  $('fwd').showModal();
+}
+
+$('fwdKind').onchange = syncTunnelForm;
+$('fwdClose').onclick = () => $('fwd').close();
+$('fwdForm').onsubmit = async (ev) => {
+  ev.preventDefault();
+  $('fwdMsg').textContent = '';
+  const kind = $('fwdKind').value;
+  try {
+    await window.api.forwards.start(tunnelTab.sid, {
+      kind,
+      bindHost: $('fwdBindHost').value.trim() || '127.0.0.1',
+      bindPort: Number($('fwdBindPort').value || 0),
+      destHost: $('fwdDestHost').value.trim(),
+      destPort: Number($('fwdDestPort').value || 0),
+    });
+    await refreshTunnels();
+  } catch (err) {
+    $('fwdMsg').textContent = String(err.message || err).replace(/^Error invoking remote method '[^']*': (Error: )?/, '');
+  }
+};
+
+/* ---------- snippets ---------- */
+
+let snippets = [];
+
+async function loadSnippets() {
+  snippets = (await window.api.snippets.list()).sort((a, b) => a.name.localeCompare(b.name));
+  const ul = $('snippetList');
+  ul.textContent = '';
+  if (!snippets.length) ul.appendChild(el('li', '', '')).append(el('small', '', 'Save commands you type often'));
+  for (const sn of snippets) {
+    const li = el('li');
+    li.title = sn.text;
+    li.append(el('span', '', sn.name));
+    const tools = el('span', 'tools');
+    const edit = el('button', 'x', '✎');
+    edit.onclick = (e) => { e.stopPropagation(); openSnippetDialog(sn); };
+    const del = el('button', 'x', '×');
+    del.onclick = async (e) => {
+      e.stopPropagation();
+      if (confirm('Delete snippet "' + sn.name + '"?')) { await window.api.snippets.remove(sn.id); loadSnippets(); }
+    };
+    tools.append(edit, del);
+    li.append(tools);
+    li.onclick = () => insertSnippet(sn);
+    ul.appendChild(li);
+  }
+}
+
+/**
+ * Send a snippet to the focused terminal. Multi-line text goes in as a bracketed paste so the shell
+ * shows it for review instead of executing every line but the last; Enter is added only if the snippet asks for it.
+ */
+function insertSnippet(sn) {
+  const tab = active;
+  const pane = tab?.focused;
+  if (!tab?.sid || !pane?.shellId) { note('Open a connected terminal first'); return; }
+  const body = sn.text.replace(/\r?\n$/, '').replace(/\r?\n/g, '\r');
+  const text = body.includes('\r') ? '\x1b[200~' + body + '\x1b[201~' : body;
+  window.api.write(tab.sid, pane.shellId, text + (sn.run ? '\r' : ''));
+  pane.term.focus();
+}
+
+function openSnippetDialog(sn) {
+  $('snipForm').reset();
+  $('s-id').value = sn?.id ?? '';
+  $('snipTitle').textContent = sn ? 'Edit snippet' : 'New snippet';
+  $('s-name').value = sn?.name ?? '';
+  $('s-text').value = sn?.text ?? '';
+  $('s-run').checked = Boolean(sn?.run);
+  $('snip').showModal();
+  $('s-name').focus();
+}
+
+$('newSnippet').onclick = () => openSnippetDialog(null);
+$('s-cancel').onclick = () => $('snip').close();
+$('snipForm').onsubmit = async (ev) => {
+  ev.preventDefault();
+  try {
+    await window.api.snippets.save({ id: $('s-id').value || undefined, name: $('s-name').value.trim(), text: $('s-text').value, run: $('s-run').checked });
+    $('snip').close();
+    loadSnippets();
+  } catch (err) {
+    note('Could not save snippet: ' + (err.message || err));
+  }
+};
+
 loadProfiles();
+loadSnippets();
