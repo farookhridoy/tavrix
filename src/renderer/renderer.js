@@ -823,5 +823,16 @@ $('snipForm').onsubmit = async (ev) => {
   }
 };
 
+/* ---------- update notice ---------- */
+
+window.api.update.onAvailable((info) => {
+  $('updateMsg').textContent = `Tavrix ${info.latest} is available (you have ${info.current}).`;
+  $('update').hidden = false;
+});
+$('updDownload').onclick = () => window.api.update.open('download');
+$('updNotes').onclick = () => window.api.update.open('notes');
+$('updLater').onclick = () => { $('update').hidden = true; };
+$('updSkip').onclick = async () => { await window.api.update.skip(); $('update').hidden = true; };
+
 loadProfiles();
 loadSnippets();

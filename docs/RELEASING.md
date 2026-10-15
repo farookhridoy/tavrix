@@ -36,6 +36,15 @@ xcrun stapler validate release/Tavrix-<version>-universal.dmg
 Status: configured but not yet run end to end, because no certificate was available when this was written.
 For CI, use `CSC_LINK` (base64 `.p12`), `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` instead of the keychain.
 
+## Publishing a release (this is what triggers the update notice)
+Installed apps learn about a new version from the **latest GitHub Release**, not from a push. After tagging:
+```bash
+npm run dist                                   # release/Tavrix-<version>-universal.dmg
+shasum -a 256 release/Tavrix-<version>-universal.dmg
+gh release create vX.Y.Z release/Tavrix-X.Y.Z-universal.dmg --title "Tavrix X.Y.Z" --notes-file notes.md
+```
+Put the changelog entry, the SHA-256 and the "unsigned: right-click > Open" note in the release notes. The tag must be plain `vX.Y.Z` (no `-beta`); other tags are ignored by the app. Mark pre-releases as pre-release so they are not "latest".
+
 ## Cutting a version
 1. Update `CHANGELOG.md` and `docs/ROADMAP.md`.
 2. `npm version <x.y.z> --no-git-tag-version`, run `npm test`.
@@ -44,4 +53,4 @@ For CI, use `CSC_LINK` (base64 `.p12`), `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_A
 
 ## Notes
 - ssh2's optional native crypto addon and `cpu-features` are excluded from the bundle; ssh2 uses its JavaScript fallback. This is required for a universal build because both architectures would contain the same binary.
-- Auto-update is not enabled. macOS auto-update needs a signed app and a reachable release feed; this repo is private.
+- Silent auto-install is not possible while the app is unsigned (macOS requires a signature). Tavrix instead notifies and opens the download.

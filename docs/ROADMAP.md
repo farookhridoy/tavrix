@@ -39,15 +39,19 @@
 - [x] Edit saved sessions
 - [x] Uploads and downloads keep the executable bit
 
-## v1.1.0 (current): safer editing
+## v1.1.0: safer editing
 - [x] New file button (creates an empty file; refuses to overwrite)
 - [x] Auto-save (off by default; 1.5 s after typing stops; pauses instead of overwriting a changed file)
 - [x] Detects server-side changes: reloads a clean editor, warns a dirty one, asks before overwriting
 - [x] "Make executable" for files that start with `#!` but are not executable
 - [x] Refuses to open binary, non-UTF-8 or >5 MB files as text (saving would corrupt them)
 
+## v1.2.0 (current): update notice
+- [x] Public repo; update bar driven by GitHub Releases (notify-only: macOS auto-install needs a signed app)
+- [x] Check for Updates menu item, automatic checks can be turned off, versions can be skipped
+
 ## Next
 - [ ] Saved tunnels that start with a session; prompt for jump-host secrets
 - [ ] Nested split layouts; mixed row/column
 - [ ] Atomic save (write to a temp file, then rename) to survive a dropped connection mid-save
-- [ ] Auto-update (needs a signed app), plugins
+- [ ] Silent auto-install (needs a signed app), plugins

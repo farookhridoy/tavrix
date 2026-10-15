@@ -88,3 +88,9 @@ dialog label select { display: block; width: 100%; margin-top: 4px; }
 #snipForm { display: flex; flex-direction: column; gap: 8px; }
 
 .editbar label.auto { color: #aaa; font-size: 12px; white-space: nowrap; display: flex; align-items: center; gap: 4px; }
+
+#update { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 12px; background: #0e639c; color: #fff; }
+#update[hidden] { display: none; }
+#update .btns { display: flex; gap: 6px; }
+#update button { background: rgba(255,255,255,.15); border-color: rgba(255,255,255,.35); color: #fff; }
+#update button:hover { background: rgba(255,255,255,.28); }
