@@ -84,3 +84,17 @@ test('checks time out instead of hanging', async () => {
   assert.equal(r.kind, 'error');
   assert.ok(Date.now() - started < 2000);
 });
+
+test('the installer matching this Mac is chosen: arm64, x64, universal, then any dmg', async () => {
+  const asset = (name: string) => ({ name, browser_download_url: `https://github.com/${REPO}/releases/download/v1.2.0/${name}` });
+  const pick = async (names: string[], arch: string) => {
+    const r = await checkForUpdate('1.1.0', reply(200, release({ assets: names.map(asset) })), undefined, 8000, arch);
+    return r.kind === 'available' ? r.info.downloadUrl?.split('/').pop() : undefined;
+  };
+  const both = ['Tavrix-1.2.0-x64.dmg', 'Tavrix-1.2.0-arm64.dmg', 'Tavrix-1.2.0-arm64.dmg.blockmap'];
+  assert.equal(await pick(both, 'arm64'), 'Tavrix-1.2.0-arm64.dmg');
+  assert.equal(await pick(both, 'x64'), 'Tavrix-1.2.0-x64.dmg');
+  assert.equal(await pick(['Tavrix-1.2.0-universal.dmg', 'Tavrix-1.2.0-x64.dmg'], 'arm64'), 'Tavrix-1.2.0-universal.dmg');
+  assert.equal(await pick(['Tavrix-1.2.0-x64.dmg'], 'arm64'), 'Tavrix-1.2.0-x64.dmg', 'better something than nothing; the page explains');
+  assert.equal(await pick(['notes.txt'], 'arm64'), undefined);
+});

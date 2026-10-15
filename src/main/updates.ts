@@ -54,14 +54,22 @@ interface Asset {
   browser_download_url?: unknown;
 }
 
-function pickInstaller(assets: unknown): string | undefined {
+/** Prefer the installer built for this CPU ('arm64' | 'x64'), then a universal one, then any .dmg. */
+function pickInstaller(assets: unknown, arch: string): string | undefined {
   if (!Array.isArray(assets)) return undefined;
   const dmgs = (assets as Asset[]).filter((a) => typeof a?.name === 'string' && /\.dmg$/i.test(a.name) && isTrustedUrl(a.browser_download_url));
-  const best = dmgs.find((a) => /universal/i.test(a.name as string)) ?? dmgs[0];
+  const named = (re: RegExp) => dmgs.find((a) => re.test(a.name as string));
+  const best = named(new RegExp(`[-_.]${arch}\\.dmg$`, 'i')) ?? named(/universal/i) ?? dmgs[0];
   return best?.browser_download_url as string | undefined;
 }
 
-export async function checkForUpdate(current: string, fetchImpl: FetchLike, url: string = FEED_URL, timeoutMs = 8000): Promise<UpdateResult> {
+export async function checkForUpdate(
+  current: string,
+  fetchImpl: FetchLike,
+  url: string = FEED_URL,
+  timeoutMs = 8000,
+  arch: string = process.arch,
+): Promise<UpdateResult> {
   const have = parseVersion(current);
   if (!have) return { kind: 'error', message: `This build has an unrecognised version (${current})` };
   let res;
@@ -93,7 +101,7 @@ export async function checkForUpdate(current: string, fetchImpl: FetchLike, url:
       current,
       latest: latest.join('.'),
       releaseUrl: body.html_url,
-      downloadUrl: pickInstaller(body.assets),
+      downloadUrl: pickInstaller(body.assets, arch),
       notes: typeof body.body === 'string' ? body.body.slice(0, 1500) : '',
     },
   };
