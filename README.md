@@ -1,6 +1,6 @@
 # Tavrix
 
-An SSH workbench for macOS: terminal, remote file browser and editor in one window. v1.2.0.
+An SSH workbench for macOS: terminal, remote file browser and editor in one window. v1.2.1.
 
 ## Run
 ```bash
@@ -18,11 +18,11 @@ Tavrix tells you when a newer version is published: a bar appears with **Downloa
 
 **Privacy:** the only network request Tavrix makes on its own is that check: an anonymous `GET https://api.github.com/repos/farookhridoy/tavrix/releases/latest` (it sends the app version in the User-Agent, and GitHub sees your IP address). Everything else goes only to the servers you connect to.
 
-**Installing:** download the `.dmg` from [Releases](https://github.com/farookhridoy/tavrix/releases/latest), drag Tavrix to Applications. The app is not signed or notarized, so on first launch macOS blocks it: right-click Tavrix > **Open** > **Open**, or run `xattr -dr com.apple.quarantine /Applications/Tavrix.app`. Verify the download against the SHA-256 in the release notes (`shasum -a 256 file.dmg`).
+**Installing:** download the `.dmg` for your Mac from [Releases](https://github.com/farookhridoy/tavrix/releases/latest) (`arm64` for Apple Silicon M1 and later, `x64` for Intel; Apple menu > About This Mac shows which), then drag Tavrix to Applications. The app is not signed or notarized, so on first launch macOS blocks it: right-click Tavrix > **Open** > **Open**, or run `xattr -dr com.apple.quarantine /Applications/Tavrix.app`. Verify the download against the SHA-256 in the release notes (`shasum -a 256 file.dmg`).
 
 ## Build an installer
 ```bash
-CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist   # release/Tavrix-<version>-universal.dmg
+CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist   # release/Tavrix-<version>-arm64.dmg and -x64.dmg
 ```
 See [Releasing](docs/RELEASING.md) for signing and notarization.
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.1
+- Much smaller download: installers are now per CPU instead of one universal build. Apple Silicon **86 MB** (was 224 MB), Intel **94 MB**. Installed size drops from 521 MB to about 255 MB.
+  - Separate `arm64` and `x64` disk images (the universal build carried two copies of the browser engine).
+  - Only English strings are kept from Electron (about 25 MB).
+  - Disk images use LZMA compression (`scripts/shrink-dmg.mjs`).
+- The update notice picks the installer for your Mac's CPU.
+- Not changed: memory use (Electron apps use a few hundred MB while running) and the feature set.
+
 ## 1.2.0
 - Update notice: Tavrix checks this project's GitHub Releases ~10 seconds after launch and every 12 hours, and shows a bar when a newer version exists, with **Download**, **Release notes**, **Later** and **Skip this version**. It never installs anything by itself; Download opens the installer link in your browser.
 - Tavrix menu: **Check for Updates…** (also reports "up to date" or errors) and **Check for Updates Automatically** (on by default; turn it off to stop all background requests).

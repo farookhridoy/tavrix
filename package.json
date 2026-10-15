@@ -1,6 +1,6 @@
 {
   "name": "tavrix",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Tavrix: an SSH terminal with a remote file browser and editor for macOS",
   "main": "dist/main/main.js",
   "private": true,
@@ -10,9 +10,9 @@
     "start": "npm run build && electron .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && node --test dist/main/*.test.js",
-    "dist": "npm run build && electron-builder --mac --universal",
+    "dist": "npm run build && electron-builder --mac && node scripts/shrink-dmg.mjs",
     "dist:dir": "npm run build && electron-builder --mac --dir",
-    "dist:release": "npm run build && electron-builder --mac --universal -c.mac.notarize=true"
+    "dist:release": "npm run build && electron-builder --mac -c.mac.notarize=true"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
@@ -51,7 +51,13 @@
       "!**/*.map",
       "!**/*.d.ts",
       "!node_modules/ssh2/lib/protocol/crypto/build/**",
-      "!node_modules/cpu-features/**"
+      "!node_modules/cpu-features/**",
+      "!node_modules/nan/**",
+      "!**/*.md",
+      "!**/LICENSE*",
+      "!**/*.markdown",
+      "!**/test/**",
+      "!**/*.ts"
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
@@ -60,7 +66,8 @@
         {
           "target": "dmg",
           "arch": [
-            "universal"
+            "arm64",
+            "x64"
           ]
         }
       ],
@@ -70,9 +77,14 @@
       "entitlementsInherit": "build/entitlements.mac.plist"
     },
     "dmg": {
-      "title": "Tavrix ${version}"
+      "title": "Tavrix ${version}",
+      "format": "UDBZ"
     },
-    "npmRebuild": false
+    "npmRebuild": false,
+    "electronLanguages": [
+      "en"
+    ],
+    "artifactName": "${productName}-${version}-${arch}.${ext}"
   },
   "repository": {
     "type": "git",
