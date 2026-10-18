@@ -57,21 +57,31 @@ jobs:
         run: npx electron-builder --win --publish never
       - name: Start the packaged app and check that it comes up
         shell: pwsh
+        run: ./scripts/smoke-test.ps1 -Exe (Join-Path $PWD 'release/win-unpacked/Tavrix.exe') -ExpectPackaged
+      - name: Install with the real installer, start the installed app, then uninstall
+        shell: pwsh
         run: |
-          $exe = Join-Path $PWD 'release/win-unpacked/Tavrix.exe'
-          if (-not (Test-Path $exe)) { throw "The installer build did not produce $exe" }
-          $out = Join-Path $PWD 'smoke.json'
-          $p = Start-Process -FilePath $exe -ArgumentList '--smoke-test', "--smoke-out=$out" -PassThru
-          if (-not $p.WaitForExit(90000)) { $p.Kill(); throw 'The app did not finish its start-up check within 90 seconds' }
-          Write-Host "exit code: $($p.ExitCode)"
-          if (-not (Test-Path $out)) { throw 'The app wrote no start-up result' }
-          $r = Get-Content $out -Raw | ConvertFrom-Json
-          Write-Host ($r | ConvertTo-Json)
-          if (-not $r.ok) { throw 'The start-up check failed: the window, the bridge, the terminal or the saved sessions did not load' }
-          if ($r.platform -ne 'win32') { throw "Expected the win32 platform, got $($r.platform)" }
-          if (-not $r.packaged) { throw 'This was not the packaged app' }
-          if (-not $r.notMac) { throw 'The window did not switch to the Windows layout' }
-          if ($r.sessionsTitle -notmatch 'Ctrl\+Shift\+B') { throw "Shortcut labels are not Windows ones: $($r.sessionsTitle)" }
+          $installer = (Get-ChildItem release -Filter 'Tavrix-*.exe' | Select-Object -First 1).FullName
+          if (-not $installer) { throw 'No installer was built' }
+          $dir = Join-Path $env:RUNNER_TEMP 'TavrixInstalled'
+          # NSIS: /S is silent, and /D= (which must come last, unquoted) is the install folder.
+          $p = Start-Process -FilePath $installer -ArgumentList '/S', "/D=$dir" -PassThru
+          if (-not $p.WaitForExit(240000)) { $p.Kill(); throw 'The installer did not finish within 4 minutes' }
+          Write-Host "installer exit code: $($p.ExitCode)"
+          if ($p.ExitCode -ne 0) { throw "The installer failed with exit code $($p.ExitCode)" }
+          $installed = Join-Path $dir 'Tavrix.exe'
+          if (-not (Test-Path $installed)) { throw "The installer did not put Tavrix.exe in $dir" }
+          $lnk = Join-Path $env:APPDATA 'Microsoft/Windows/Start Menu/Programs/Tavrix.lnk'
+          if (-not (Test-Path $lnk)) { throw "No Start menu shortcut at $lnk" }
+          ./scripts/smoke-test.ps1 -Exe $installed -ExpectPackaged
+          $uninstaller = Join-Path $dir 'Uninstall Tavrix.exe'
+          if (-not (Test-Path $uninstaller)) { throw 'The installer did not leave an uninstaller' }
+          Start-Process -FilePath $uninstaller -ArgumentList '/S' | Out-Null
+          $deadline = (Get-Date).AddSeconds(120)
+          while ((Test-Path $installed) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 2 }
+          if (Test-Path $installed) { throw 'The uninstaller did not remove Tavrix.exe' }
+          if (Test-Path $lnk) { throw 'The uninstaller left the Start menu shortcut behind' }
+          Write-Host 'Installed, started and uninstalled cleanly'
       - name: Checksums
         shell: pwsh
         run: |

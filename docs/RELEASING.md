@@ -13,7 +13,7 @@ xattr -dr com.apple.quarantine /Applications/Tavrix.app
 ```
 
 ## The Windows installer (built on GitHub, unsigned)
-Windows installers are built on a real Windows machine by `.github/workflows/windows.yml`; building one on a Mac would need Wine and could not be tested. The workflow runs on every pull request that touches the app (so Windows breakage shows up before merging): it runs `npm test` on Windows, builds `release/Tavrix-<version>-x64.exe` with `electron-builder --win`, **starts the packaged app** with `Tavrix.exe --smoke-test` and checks that the window, the bridge, the terminal and the saved-session store came up with the Windows layout and shortcut labels, and uploads the installer as the `tavrix-windows` artifact (14 days).
+Windows installers are built on a real Windows machine by `.github/workflows/windows.yml`; building one on a Mac would need Wine and could not be tested. The workflow runs on every pull request that touches the app (so Windows breakage shows up before merging): it runs `npm test` on Windows, builds `release/Tavrix-<version>-x64.exe` with `electron-builder --win`, **starts the packaged app** with `Tavrix.exe --smoke-test` (`scripts/smoke-test.ps1`) and checks that the window, the bridge, the terminal and the saved-session store came up with the Windows layout and shortcut labels, then **installs with the real installer** (silently, into a temp folder), starts the installed app, checks the Start menu entry, and **uninstalls** it again, and uploads the installer as the `tavrix-windows` artifact (14 days).
 
 To put the installer on a release (after the release exists, see below):
 ```bash
