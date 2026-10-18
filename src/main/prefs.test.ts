@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sanitizeTerminal, sanitizeConnection, sanitizeFolder, shellQuote, startupInput, DEFAULT_TERMINAL, THEMES } from './prefs';
+import { sanitizeTerminal, sanitizeConnection, sanitizeFolder, sanitizeKind, shellQuote, startupInput, DEFAULT_TERMINAL, THEMES } from './prefs';
 
 test('terminal prefs: valid values pass, out-of-range ones are clamped, junk is dropped', () => {
   assert.deepEqual(sanitizeTerminal({ fontSize: 15, theme: 'dracula', scrollback: 1000, cursorStyle: 'bar', cursorBlink: false, copyOnSelect: true, fontFamily: 'Menlo, monospace' }),
@@ -39,4 +39,9 @@ test('startup input is quoted, one line per field, and cannot be split into extr
   assert.equal(startupInput('', '  '), '');
   assert.equal(startupInput('/a\nrm -rf /', undefined), "cd -- '/a rm -rf /'\r", 'a newline cannot smuggle in a second command');
   assert.equal(startupInput(undefined, 'echo a\necho b'), 'echo a echo b\r');
+});
+
+test('session kind: only "sftp" is kept; everything else is a normal SSH session', () => {
+  assert.equal(sanitizeKind('sftp'), 'sftp');
+  for (const v of ['ssh', 'SFTP', 'ftp', '', null, undefined, 1, {}, ['sftp']]) assert.equal(sanitizeKind(v), undefined, String(v));
 });

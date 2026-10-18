@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog, shell, Menu, IpcMainInvokeEvent, M
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { homedir, userInfo } from 'node:os';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { Session, ConnectRequest, Progress, KeyPassphraseError, JumpHostError, Hop, FileStat, inspectKeyFile, SecretPrompt, AuthFailedError, ConnectCancelledError } from './ssh';
 import type { ForwardSpec } from './forwards';
@@ -23,7 +23,7 @@ import {
   getSettings,
   saveSettings,
 } from './store';
-import { sanitizeConnection, sanitizeTerminal, sanitizeFolder, startupInput, DEFAULT_TERMINAL, DEFAULT_CONNECTION } from './prefs';
+import { sanitizeConnection, sanitizeTerminal, sanitizeFolder, sanitizeKind, startupInput, DEFAULT_TERMINAL, DEFAULT_CONNECTION } from './prefs';
 import { checkForUpdate, openTarget, FEED_URL, UpdateInfo } from './updates';
 
 /**
@@ -33,6 +33,14 @@ import { checkForUpdate, openTarget, FEED_URL, UpdateInfo } from './updates';
 function notify(contents: WebContents, channel: string, ...args: unknown[]): void {
   if (!contents.isDestroyed()) contents.send(channel, ...args);
 }
+
+/**
+ * `Tavrix --smoke-test [--smoke-out=FILE]`: load the window hidden, check that the app's own page and bridge came up,
+ * write the result as JSON and exit (0 = fine). Used by CI to prove a packaged build starts, e.g. on Windows.
+ * It only reads this app's own page and takes no input from the network.
+ */
+const smokeTest = process.argv.includes('--smoke-test');
+const smokeOut = process.argv.find((a) => a.startsWith('--smoke-out='))?.slice('--smoke-out='.length);
 
 const sessions = new Map<string, Session>();
 /** Startup input per connection, typed into the first shell opened on it and then forgotten. */
@@ -98,7 +106,9 @@ function startupFor(input: ConnectInput): string {
 function cleanProfile(p: Partial<Profile> & Record<string, unknown>, id: string): Profile {
   const text = (v: unknown, max = 500): string | undefined => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined);
   const conn = sanitizeConnection(p);
-  const terminal = sanitizeTerminal(p.terminal);
+  const kind = sanitizeKind(p.kind);
+  // A files-only session never opens a shell, so terminal look and startup command mean nothing for it.
+  const terminal = kind === 'sftp' ? {} : sanitizeTerminal(p.terminal);
   return {
     id,
     name: text(p.name, 100) ?? 'Untitled',
@@ -108,8 +118,9 @@ function cleanProfile(p: Partial<Profile> & Record<string, unknown>, id: string)
     privateKeyPath: text(p.privateKeyPath, 1000),
     jumpHostId: text(p.jumpHostId, 100),
     folder: sanitizeFolder(p.folder),
+    kind,
     startupDir: text(p.startupDir, 1000),
-    startupCommand: text(p.startupCommand, 2000),
+    startupCommand: kind === 'sftp' ? undefined : text(p.startupCommand, 2000),
     ...conn,
     terminal: Object.keys(terminal).length ? terminal : undefined,
   };
@@ -265,46 +276,85 @@ function toggleUi(what: 'sessions' | 'files' | 'editor-full'): void {
   if (w) notify(w.webContents, 'ui:toggle', what);
 }
 
+const isMac = process.platform === 'darwin';
+
+function showAbout(): void {
+  const win = BrowserWindow.getAllWindows()[0];
+  const opts = { type: 'info' as const, title: 'About Tavrix', message: `Tavrix ${app.getVersion()}`, detail: 'SSH terminal, file manager and editor.\nOpen source, MIT license.\nhttps://tavrix.farookhridoy.com', buttons: ['OK'] };
+  if (win) void dialog.showMessageBox(win, opts);
+  else void dialog.showMessageBox(opts);
+}
+
 function buildMenu(): void {
-  const template: MenuItemConstructorOptions[] = [
+  const settingsItem: MenuItemConstructorOptions = {
+    label: 'Settings…',
+    accelerator: 'CmdOrCtrl+,',
+    click: () => { const w = BrowserWindow.getAllWindows()[0]; if (w) notify(w.webContents, 'ui:open-settings'); },
+  };
+  const updateItems: MenuItemConstructorOptions[] = [
+    { label: 'Check for Updates…', click: () => void runUpdateCheck(true) },
     {
-      label: app.name,
-      submenu: [
-        { role: 'about' },
-        { type: 'separator' },
-        {
-          label: 'Settings…',
-          accelerator: 'CmdOrCtrl+,',
-          click: () => { const w = BrowserWindow.getAllWindows()[0]; if (w) notify(w.webContents, 'ui:open-settings'); },
-        },
-        { type: 'separator' },
-        { label: 'Check for Updates…', click: () => void runUpdateCheck(true) },
-        {
-          label: 'Check for Updates Automatically',
-          type: 'checkbox',
-          checked: getSettings().updateCheck,
-          click: (item) => saveSettings({ updateCheck: item.checked }),
-        },
-        { type: 'separator' },
-        { role: 'services' },
-        { type: 'separator' },
-        { role: 'hide' },
-        { role: 'hideOthers' },
-        { role: 'unhide' },
-        { type: 'separator' },
-        { role: 'quit' },
-      ],
+      label: 'Check for Updates Automatically',
+      type: 'checkbox',
+      checked: getSettings().updateCheck,
+      click: (item) => saveSettings({ updateCheck: item.checked }),
     },
-    { role: 'editMenu' },
+  ];
+  // macOS keeps these under the app's own menu; Windows and Linux have a File menu instead.
+  const first: MenuItemConstructorOptions = isMac
+    ? {
+        label: app.name,
+        submenu: [
+          { role: 'about' },
+          { type: 'separator' },
+          settingsItem,
+          { type: 'separator' },
+          ...updateItems,
+          { type: 'separator' },
+          { role: 'services' },
+          { type: 'separator' },
+          { role: 'hide' },
+          { role: 'hideOthers' },
+          { role: 'unhide' },
+          { type: 'separator' },
+          { role: 'quit' },
+        ],
+      }
+    : {
+        label: 'File',
+        submenu: [settingsItem, { type: 'separator' }, ...updateItems, { type: 'separator' }, { role: 'quit' }],
+      };
+  // On Windows a menu accelerator takes the key before the page sees it, so Ctrl+C would copy instead of interrupting
+  // the program running in the terminal, and Ctrl+Z / Ctrl+R would never reach the shell. Keep the entries (and show the
+  // keys) but do not register them; the renderer handles copy and paste in the terminal itself.
+  const passThrough = (item: MenuItemConstructorOptions): MenuItemConstructorOptions => (isMac ? item : { ...item, registerAccelerator: false });
+  const edit: MenuItemConstructorOptions = isMac
+    ? { role: 'editMenu' }
+    : {
+        label: 'Edit',
+        submenu: [
+          passThrough({ role: 'undo' }),
+          passThrough({ role: 'redo' }),
+          { type: 'separator' },
+          passThrough({ role: 'cut' }),
+          passThrough({ role: 'copy' }),
+          passThrough({ role: 'paste' }),
+          passThrough({ role: 'selectAll' }),
+        ],
+      };
+  const template: MenuItemConstructorOptions[] = [
+    first,
+    edit,
     {
       label: 'View',
       submenu: [
-        { label: 'Show/Hide Sessions Sidebar', accelerator: 'CmdOrCtrl+B', click: () => toggleUi('sessions') },
-        { label: 'Show/Hide File Panel', accelerator: 'CmdOrCtrl+Shift+B', click: () => toggleUi('files') },
+        // Plain Ctrl+B is tmux's prefix key, so on Windows these use Ctrl+Shift.
+        { label: 'Show/Hide Sessions Sidebar', accelerator: isMac ? 'Cmd+B' : 'Ctrl+Shift+B', click: () => toggleUi('sessions') },
+        { label: 'Show/Hide File Panel', accelerator: isMac ? 'Cmd+Shift+B' : 'Ctrl+Shift+E', click: () => toggleUi('files') },
         { label: 'Full Screen Editor', accelerator: 'CmdOrCtrl+Shift+F', click: () => toggleUi('editor-full') },
         { type: 'separator' },
-        { role: 'reload' },
-        { role: 'forceReload' },
+        passThrough({ role: 'reload' }),
+        passThrough({ role: 'forceReload' }),
         { role: 'toggleDevTools' },
         { type: 'separator' },
         { role: 'resetZoom' },
@@ -324,6 +374,7 @@ function buildMenu(): void {
         { label: 'Manual on GitHub', click: () => openWebLink(HELP_LINKS.manual) },
         { label: 'Release Notes', click: () => openWebLink(HELP_LINKS.releases) },
         { label: 'Report an Issue…', click: () => openWebLink(HELP_LINKS.issues) },
+        ...(isMac ? [] : ([{ type: 'separator' }, { label: 'About Tavrix', click: showAbout }] as MenuItemConstructorOptions[])),
       ],
     },
   ];
@@ -334,7 +385,10 @@ function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1360,
     height: 840,
-    titleBarStyle: 'hiddenInset',
+    // macOS draws its traffic lights over our own title strip; Windows keeps the normal frame and menu bar.
+    ...(isMac ? { titleBarStyle: 'hiddenInset' as const } : {}),
+    backgroundColor: '#1e1e1e',
+    show: !smokeTest,
     webPreferences: {
       preload: join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -355,9 +409,38 @@ function createWindow(): BrowserWindow {
   });
   win.webContents.on('will-navigate', (e, url) => blockOutside(e, url));
   win.webContents.on('will-frame-navigate', (e) => blockOutside(e, e.url));
+  if (smokeTest) {
+    win.webContents.once('did-finish-load', () => void runSmokeTest(win));
+    setTimeout(() => app.exit(2), 45_000).unref();
+  }
   win.on('focus', recheckOnFocus);
   win.webContents.on('did-finish-load', announceUpdate); // a window opened after the check still gets the banner
   return win;
+}
+
+async function runSmokeTest(win: BrowserWindow): Promise<void> {
+  let result: Record<string, unknown>;
+  try {
+    result = (await win.webContents.executeJavaScript(`(async () => ({
+      bridge: typeof window.api?.connect === 'function' && typeof window.api?.platform === 'string',
+      platform: window.api?.platform,
+      ui: Boolean(document.getElementById('new') && document.getElementById('newSftp') && document.getElementById('sessionList') && document.getElementById('tabbar')),
+      notMac: document.body.classList.contains('notmac'),
+      sessionsTitle: document.getElementById('tglSessions')?.title,
+      terminal: typeof Terminal === 'function',
+      profiles: Array.isArray(await window.api.profiles.list()),
+      title: document.title,
+    }))()`)) as Record<string, unknown>;
+  } catch (err) {
+    result = { error: err instanceof Error ? err.message : String(err) };
+  }
+  const ok = result.bridge === true && result.ui === true && result.terminal === true && result.profiles === true;
+  const line = JSON.stringify({ ok, version: app.getVersion(), packaged: app.isPackaged, ...result });
+  if (smokeOut) {
+    try { writeFileSync(smokeOut, line + '\n'); } catch { /* the exit code still tells the story */ }
+  }
+  console.log('SMOKE ' + line);
+  app.exit(ok ? 0 : 1);
 }
 
 function publicProfile(p: Profile) {
@@ -630,10 +713,11 @@ function registerIpc(): void {
 }
 
 app.whenReady().then(() => {
+  if (process.platform === 'win32') app.setAppUserModelId('app.tavrix.desktop'); // taskbar grouping and pinning
   registerIpc();
   buildMenu();
   createWindow();
-  scheduleUpdateChecks();
+  if (!smokeTest) scheduleUpdateChecks();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });

@@ -19,7 +19,10 @@ export class KeyPassphraseError extends Error {
 
 /** `~` and `~/x` mean the home folder, as in a shell; the file APIs do not do this themselves. */
 export function expandHome(path: string): string {
-  return path === '~' || path.startsWith('~/') ? homedir() + path.slice(1) : path;
+  if (path === '~') return homedir();
+  // `~/x` anywhere, and `~\x` as people type it on Windows. Joined, not concatenated, so Windows gets one kind of slash.
+  if (path.startsWith('~/') || (process.platform === 'win32' && path.startsWith('~\\'))) return pathJoin(homedir(), path.slice(2));
+  return path;
 }
 
 export type KeyFileInfo =

@@ -1,20 +1,23 @@
 # Tavrix manual
 
-Tavrix is a Mac app that puts an **SSH terminal**, a **file manager** and a **code editor** for your servers in one window. This manual covers everything it does. Use the contents list on the left to jump around, or press <kbd>F1</kbd> in the app to open it.
+Tavrix is an app for Mac and Windows that puts an **SSH terminal**, a **file manager** and a **code editor** for your servers in one window. This manual covers everything it does. Use the contents list on the left to jump around, or press <kbd>F1</kbd> in the app to open it.
 
 ![The Tavrix window: sessions on the left, terminal and files in the middle, editor tabs below](images/main-window.jpg "The main window: saved sessions, a terminal, the file panel and an editor with tabs")
 
 ## Install
 
-1. Download the installer for your Mac from the [Releases page](https://github.com/farookhridoy/tavrix/releases/latest):
-   - **`…-arm64.dmg`** for Apple Silicon (M1 and later)
-   - **`…-x64.dmg`** for Intel Macs
+1. Download the installer for your computer from the [Releases page](https://github.com/farookhridoy/tavrix/releases/latest):
+   - **`…-arm64.dmg`** for a Mac with Apple Silicon (M1 and later)
+   - **`…-x64.dmg`** for a Mac with an Intel processor
+   - **`…-x64.exe`** for Windows 10 or later (64-bit)
 
-   Not sure which? Apple menu → **About This Mac** shows the chip.
-2. Open the `.dmg` and drag **Tavrix** into **Applications**.
-3. Open Tavrix. The first time, macOS may stop you; see below.
+   On a Mac, not sure which? Apple menu → **About This Mac** shows the chip.
+2. **Mac:** open the `.dmg` and drag **Tavrix** into **Applications**. **Windows:** double-click the installer and follow it (the default folder is fine); Tavrix is added to the Start menu.
+3. Open Tavrix. The first time, your computer may stop you; see below.
 
 ### The first launch warning
+
+#### On a Mac
 
 > **Do not skip this.** Tavrix is not signed by a paid Apple Developer account, so the first time you open a downloaded copy macOS shows **"Apple could not verify "Tavrix" is free of malware…"**. That is expected, and you only need to do this once.
 
@@ -29,12 +32,28 @@ Prefer Terminal? This does the same thing:
 xattr -dr com.apple.quarantine /Applications/Tavrix.app
 ```
 
+#### On Windows
+
+> **Do not skip this.** Tavrix is not signed with a paid Windows certificate, so your browser and Windows SmartScreen ask you to confirm it the first time. That is expected, and you only need to do this once.
+
+1. If your browser says the file is not commonly downloaded, choose **Keep**, then **Keep anyway**.
+2. Double-click the installer. If Windows shows **"Windows protected your PC"**, click **More info**, then **Run anyway**.
+3. Finish the installer, then open Tavrix from the Start menu.
+
 ### Verify your download
 
 Compare the SHA-256 in the release notes with your file's. The two values must match exactly:
 
+On a Mac (Terminal):
+
 ```
 shasum -a 256 ~/Downloads/Tavrix-*.dmg
+```
+
+On Windows (PowerShell):
+
+```
+Get-FileHash "$HOME\Downloads\Tavrix-*.exe" -Algorithm SHA256
 ```
 
 ### Updates
@@ -59,7 +78,7 @@ Every thin divider between panels can be dragged to resize it. Double-click a di
 
 ## Connect to a server
 
-Click **+** in the sidebar. The dialog has four tabs, like the session settings in other SSH tools.
+Click **+** in the sidebar (or **SFTP** for a files-only session, see below). The dialog has four tabs, like the session settings in other SSH tools; the **Session type** at the top of the first tab chooses between SSH and SFTP.
 
 ### Basic
 
@@ -71,7 +90,7 @@ Click **+** in the sidebar. The dialog has four tabs, like the session settings 
 
 ![Choosing a private key: Tavrix confirms what kind of key it is](images/key-browse.png "After picking a key, Tavrix tells you what it is")
 
-**Save this session** (on the Bookmark tab) stores the session. Passwords and passphrases are encrypted with the macOS Keychain; they are never written as plain text. If you do not save a password, Tavrix asks for it while connecting. Wrong passwords are retried on the same connection, up to three times.
+**Save this session** (on the Bookmark tab) stores the session. Passwords and passphrases are encrypted with your system's secure storage (the macOS Keychain, or Windows' own protection); they are never written as plain text. If you do not save a password, Tavrix asks for it while connecting. Wrong passwords are retried on the same connection, up to three times.
 
 ### Advanced
 
@@ -83,7 +102,19 @@ Click **+** in the sidebar. The dialog has four tabs, like the session settings 
 - **Start in folder**: after login, Tavrix types `cd` to this folder in the first terminal, and the file panel opens there.
 - **Run command after login**: typed into the first terminal. Both are typed where you can see them; nothing is hidden. Split terminals do not repeat them.
 
-### Terminal
+### SFTP sessions (files only)
+
+Some servers only allow file transfer, with no shell. Others you simply want to browse and edit without a terminal. For these, click **SFTP** in the sidebar (or set **Session type** to *SFTP* in the New connection dialog).
+
+- The connection is made exactly like an SSH session, with the same host, port, user, password or key, jump host and host-key check.
+- Tavrix never opens a remote shell. The tab shows the **file panel and the editor** only: browse, open and edit files, upload and download, rename, change permissions, create files and folders.
+- The Split, Close pane and Tunnels buttons are not shown, because there is no terminal.
+- In the sidebar the session carries an **SFTP** tag, and its tab a small folder mark. **Start in folder** becomes **Open this folder first**; the startup command and the Terminal tab do not apply and are hidden.
+- To turn an SFTP session into a normal SSH one (or back), edit it and change **Session type**.
+
+If an ordinary SSH session to a server that allows only SFTP shows *"This service allows sftp connections only"* in the terminal, make it an SFTP session instead.
+
+## Terminal
 
 ![The Terminal tab: font, size, theme, scrollback, cursor and copy-on-select, each set to Default](images/session-terminal.png "Terminal: look of this one session")
 
@@ -101,7 +132,7 @@ The first time you connect to a server, Tavrix shows its **fingerprint** and ask
 
 ### Importing from `~/.ssh/config`
 
-Click **Import** in the sidebar. Tavrix adds each concrete `Host` it finds (wildcards are skipped) with its `HostName`, `User`, `Port` and `IdentityFile`. A host without a `User` uses your Mac account name, as OpenSSH does. A `ProxyJump` that names a single other host is linked as a jump host; longer chains are reported and left for you to set.
+Click **Import** in the sidebar. Tavrix adds each concrete `Host` it finds (wildcards are skipped) with its `HostName`, `User`, `Port` and `IdentityFile`. A host without a `User` uses your account name on this computer, as OpenSSH does. A `ProxyJump` that names a single other host is linked as a jump host; longer chains are reported and left for you to set.
 
 ### Servers with one-time codes, or without passwords
 
@@ -109,7 +140,7 @@ Some servers ask for a **one-time code** after the password, or accept passwords
 
 ## Terminal
 
-The terminal behaves like Terminal.app: <kbd>⌘C</kbd> copies, <kbd>⌘V</kbd> pastes, and there is scrollback. Turn on **Copy on select** in Settings to copy as soon as you select text. Typing `exit` in the last terminal ends the connection.
+The terminal behaves like your system's own: on a Mac <kbd>⌘C</kbd> copies and <kbd>⌘V</kbd> pastes; on Windows <kbd>Ctrl+C</kbd> copies when text is selected (otherwise it interrupts the running program), <kbd>Ctrl+Shift+C</kbd> always copies, and <kbd>Ctrl+V</kbd> or <kbd>Ctrl+Shift+V</kbd> pastes. There is scrollback. Turn on **Copy on select** in Settings to copy as soon as you select text. Typing `exit` in the last terminal ends the connection.
 
 ### Split terminals
 
@@ -127,7 +158,7 @@ The panel on the left of a connected tab shows the server's files.
 - **Click a folder** to open it. **Double-click a file** to edit it.
 - **Right-click** a file or folder for **Download…**, **Rename…**, **Permissions…** (octal, like `644` or `755`) and **Delete**. Deleting a folder asks first and removes everything inside it.
 - **Right-click the empty area**, or use the buttons at the top: **↑** parent folder, **⟳** refresh, **+ File**, **+ Folder**, **Upload**.
-- **Upload** by clicking *Upload*, or by **dragging files and folders from Finder** onto the panel. If a name already exists you are asked whether to replace it.
+- **Upload** by clicking *Upload*, or by **dragging files and folders from Finder (or File Explorer)** onto the panel. If a name already exists you are asked whether to replace it.
 - **Download** a file or a whole folder; you choose where it goes. A progress bar shows the transfer with a **Cancel** button. Cancelling removes the half-copied file.
 - File permissions are kept in both directions, so an executable script stays executable. Symbolic links are skipped in transfers.
 - Folders you have visited show instantly and refresh quietly behind; a big folder is read with several requests at once, which makes a big difference on a distant server.
@@ -140,7 +171,7 @@ Open a file and the editor appears below the terminals.
 
 - **Tabs**: every file opens in its own tab. Click to switch, **×** (or middle-click) to close. A dot ● marks unsaved changes; closing a file with unsaved changes asks first. Cursor position and scroll are remembered per file.
 - **Syntax highlighting** by file extension.
-- **Save** with <kbd>⌘S</kbd> or the **Save** button. **Auto-save** (checkbox in the editor bar) saves 1.5 seconds after you stop typing; it is off by default.
+- **Save** with <kbd>⌘S</kbd> (<kbd>Ctrl+S</kbd> on Windows) or the **Save** button. **Auto-save** (checkbox in the editor bar) saves 1.5 seconds after you stop typing; it is off by default.
 - **Changes on the server are noticed.** Tavrix remembers each file's size and time when you open or save it. When you come back to the window, a file you have not edited reloads itself if it changed on the server; a file with your unsaved edits is only flagged. Saving over a changed file asks before overwriting, and auto-save pauses instead of overwriting. **Reload** takes the server's version.
 - **Make executable** appears for a file that starts with `#!` but is not executable.
 - Binary files, files that are not valid UTF-8 text, and files over 5 MB are not opened as text, because saving them would damage them. Download them instead.
@@ -150,7 +181,7 @@ Open a file and the editor appears below the terminals.
 
 ![The editor using the whole window](images/fullscreen-editor.jpg "Full-screen editor: everything else steps aside")
 
-Click **⤢ Full screen** in the editor bar, choose **View → Full Screen Editor**, or press <kbd>⌘⇧F</kbd>. The sidebar, file panel and terminals step aside. Press <kbd>Esc</kbd> (or click **⤡ Exit full screen**) to bring them back. This is separate from the macOS full-screen window button.
+Click **⤢ Full screen** in the editor bar, choose **View → Full Screen Editor**, or press <kbd>⌘⇧F</kbd> (<kbd>Ctrl+Shift+F</kbd> on Windows). The sidebar, file panel and terminals step aside. Press <kbd>Esc</kbd> (or click **⤡ Exit full screen**) to bring them back. This is separate from the macOS full-screen window button.
 
 ### Making room
 
@@ -164,11 +195,11 @@ Click **Tunnels** in the status bar of a connected tab.
 
 | Type | What it does | Example |
 |---|---|---|
-| **Local (-L)** | Opens a port on your Mac that leads to a host reachable *from the server* | Reach a database that only the server can see: listen on `5433`, destination `db.internal:5432`, then point your app at `localhost:5433` |
-| **Remote (-R)** | Opens a port on the *server* that leads back to a service on your Mac | Show a dev site running on your Mac at `localhost:3000` to someone on the server |
-| **Dynamic (-D)** | A SOCKS5 proxy on your Mac that sends traffic out through the server | Set `localhost:1080` as the SOCKS proxy in a browser to browse from the server's network |
+| **Local (-L)** | Opens a port on your computer that leads to a host reachable *from the server* | Reach a database that only the server can see: listen on `5433`, destination `db.internal:5432`, then point your app at `localhost:5433` |
+| **Remote (-R)** | Opens a port on the *server* that leads back to a service on your computer | Show a dev site running on your computer at `localhost:3000` to someone on the server |
+| **Dynamic (-D)** | A SOCKS5 proxy on your computer that sends traffic out through the server | Set `localhost:1080` as the SOCKS proxy in a browser to browse from the server's network |
 
-Listening addresses default to `127.0.0.1` (only your Mac). Listening on anything else asks for confirmation, because anyone who can reach your Mac could then use the tunnel. Use **Stop** to close a tunnel; tunnels also end with the connection.
+Listening addresses default to `127.0.0.1` (only your computer). Listening on anything else asks for confirmation, because anyone who can reach your computer could then use the tunnel. Use **Stop** to close a tunnel; tunnels also end with the connection.
 
 ## Snippets
 
@@ -178,7 +209,7 @@ Click **+** next to **Snippets** to save a command. Click a snippet to insert it
 
 ## Settings
 
-Open Settings with the **⚙** button in the sidebar, or <kbd>⌘,</kbd>.
+Open Settings with the **⚙** button in the sidebar, or <kbd>⌘,</kbd> (<kbd>Ctrl+,</kbd> on Windows).
 
 ![The Settings window](images/settings.png "Settings: how every terminal looks, and connection defaults")
 
@@ -195,18 +226,22 @@ Changes apply to open terminals immediately. **Reset to defaults** fills the for
 
 ## Keyboard and mouse
 
-| Action | Shortcut |
-|---|---|
-| Settings | <kbd>⌘,</kbd> |
-| Show or hide the sessions sidebar | <kbd>⌘B</kbd> |
-| Show or hide the file panel | <kbd>⌘⇧B</kbd> |
-| Full-screen editor on or off | <kbd>⌘⇧F</kbd> |
-| Save the open file | <kbd>⌘S</kbd> |
-| Open this manual | <kbd>F1</kbd> |
-| Leave full-screen editor, close the tour | <kbd>Esc</kbd> |
-| Resize a divider with the keyboard | focus it, then <kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> (<kbd>Shift</kbd> for bigger steps) |
-| Reset a divider | double-click it |
-| Close a file tab | click **×**, or middle-click the tab |
+| Action | Mac | Windows |
+|---|---|---|
+| Settings | <kbd>⌘,</kbd> | <kbd>Ctrl+,</kbd> |
+| Show or hide the sessions sidebar | <kbd>⌘B</kbd> | <kbd>Ctrl+Shift+B</kbd> |
+| Show or hide the file panel | <kbd>⌘⇧B</kbd> | <kbd>Ctrl+Shift+E</kbd> |
+| Full-screen editor on or off | <kbd>⌘⇧F</kbd> | <kbd>Ctrl+Shift+F</kbd> |
+| Save the open file | <kbd>⌘S</kbd> | <kbd>Ctrl+S</kbd> |
+| Copy in the terminal | <kbd>⌘C</kbd> | <kbd>Ctrl+Shift+C</kbd>, or <kbd>Ctrl+C</kbd> when text is selected |
+| Paste in the terminal | <kbd>⌘V</kbd> | <kbd>Ctrl+V</kbd> or <kbd>Ctrl+Shift+V</kbd> |
+| Open this manual | <kbd>F1</kbd> | <kbd>F1</kbd> |
+| Leave full-screen editor, close the tour | <kbd>Esc</kbd> | <kbd>Esc</kbd> |
+| Resize a divider with the keyboard | focus it, then <kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> (<kbd>Shift</kbd> for bigger steps) | same |
+| Reset a divider | double-click it | same |
+| Close a file tab | click **×**, or middle-click the tab | same |
+
+On Windows, plain <kbd>Ctrl+C</kbd>, <kbd>Ctrl+Z</kbd>, <kbd>Ctrl+R</kbd> and <kbd>Ctrl+B</kbd> are left for the program in the terminal (interrupt, suspend, history search, the tmux prefix), so the panel shortcuts use <kbd>Ctrl+Shift</kbd>.
 
 ## The quick tour
 
@@ -218,11 +253,11 @@ Close it any time with **✕**, **Skip tour** or <kbd>Esc</kbd>; it will not com
 
 ## Where Tavrix keeps things
 
-Everything lives in `~/Library/Application Support/Tavrix/`:
+Everything lives in `~/Library/Application Support/Tavrix/` on a Mac and in `%APPDATA%\Tavrix\` on Windows:
 
 | File | Contents |
 |---|---|
-| `sessions.json` | Saved sessions. Passwords and passphrases are stored encrypted with the macOS Keychain, never as plain text |
+| `sessions.json` | Saved sessions. Passwords and passphrases are stored encrypted with the macOS Keychain or Windows' own protection, never as plain text |
 | `known_hosts.json` | Server fingerprints you trusted |
 | `settings.json` | Your settings and whether you have seen the tour |
 | `snippets.json` | Your snippets |
@@ -235,6 +270,8 @@ Tavrix has no accounts, analytics or telemetry. Its **only** automatic network r
 
 ## Troubleshooting
 
+**Windows says "Windows protected your PC".** Click **More info**, then **Run anyway**. See [The first launch warning](#the-first-launch-warning).
+
 **macOS says Tavrix "Not Opened" or "damaged".** See [The first launch warning](#the-first-launch-warning). Click **Done**, then **Open Anyway** in System Settings → Privacy & Security.
 
 **"Authentication failed".** Check the username and password. If the server accepts only keys, pick your private key with **Browse…**. If you chose a `.pub` file, choose the private file next to it.
@@ -244,7 +281,7 @@ Tavrix has no accounts, analytics or telemetry. Its **only** automatic network r
 **The connection drops when idle.** Keep-alive is on at 30 seconds by default. Lower it on the session's Advanced tab if a network is more aggressive, or check that the server answers keep-alives.
 
 **The server blocks my IP address a few minutes after I connect.** That is a security rule on the server or its provider (for example *fail2ban*, a firewall rate limit, or a cloud "security group"); a web terminal from the provider's own site works because it runs inside their network. Tavrix uses a single connection per session (terminals, file panel and editor all share it), and asks for a password on that same connection, so it makes fewer connections than most tools. To find the cause:
-1. Compare with Terminal.app: run `ssh -v user@host`. If it is blocked too, the rule is not about Tavrix.
+1. Compare with your system's own SSH: run `ssh -v user@host` in Terminal (or PowerShell). If it is blocked too, the rule is not about Tavrix.
 2. On the server, check what banned you: `sudo fail2ban-client status sshd` and `sudo tail /var/log/auth.log`. Unban with `sudo fail2ban-client set sshd unbanip YOUR.IP`.
 3. Prefer a **key** over a password, and avoid several wrong password attempts in a row.
 4. Ask your provider whether connections are limited per IP.
@@ -253,7 +290,7 @@ Tavrix has no accounts, analytics or telemetry. Its **only** automatic network r
 
 **A file will not open in the editor.** It is binary, not UTF-8 text, or over 5 MB. Download it instead.
 
-**Start over.** Quit Tavrix and delete `~/Library/Application Support/Tavrix`.
+**Start over.** Quit Tavrix and delete `~/Library/Application Support/Tavrix` (Mac) or `%APPDATA%\Tavrix` (Windows).
 
 ## Getting help
 

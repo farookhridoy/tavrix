@@ -37,7 +37,7 @@
     <aside id="sessions">
       <div class="head">
         <strong>Sessions</strong>
-        <span><button id="new" title="New connection">+</button><button id="import" title="Import ~/.ssh/config">Import</button><button id="gear" title="Settings (⌘,)">⚙</button></span>
+        <span><button id="new" title="New SSH connection: terminal, files and editor">+</button><button id="newSftp" title="New SFTP session: files and editor only, no terminal">SFTP</button><button id="import" title="Import hosts from your ~/.ssh/config" aria-label="Import hosts from ~/.ssh/config">⤓</button><button id="gear" title="Settings (⌘,)">⚙</button></span>
       </div>
       <ul id="sessionList"></ul>
       <div class="head">
@@ -65,6 +65,12 @@
         <button type="button" data-tab="book">Bookmark</button>
       </div>
       <div class="tabpane" data-pane="basic">
+        <label>Session type
+          <select id="f-kind">
+            <option value="ssh">SSH: terminal, files and editor</option>
+            <option value="sftp">SFTP: files and editor only (no terminal)</option>
+          </select>
+        </label>
         <label><span class="lab">Name <span class="opt">(optional)</span></span>
           <input id="f-name" placeholder="e.g. web-01" />
         </label>
@@ -104,10 +110,10 @@
         <label>Connect timeout (seconds; blank = default)
           <input id="f-timeout" type="number" min="5" max="120" placeholder="default" />
         </label>
-        <label>Start in folder (typed as <code>cd</code> in the first terminal)
+        <label><span id="f-sdir-lab">Start in folder (typed as cd in the first terminal)</span>
           <input id="f-sdir" placeholder="/var/www" />
         </label>
-        <label>Run command after login (typed in the first terminal)
+        <label id="f-scmd-label">Run command after login (typed in the first terminal)
           <input id="f-scmd" placeholder="htop" />
         </label>
       </div>
@@ -117,7 +123,7 @@
           <input id="f-folder" list="folderList" placeholder="e.g. Production" />
           <datalist id="folderList"></datalist>
         </label>
-        <label><input id="f-save" type="checkbox" checked /> Save this session (secret stored encrypted with macOS Keychain)</label>
+        <label><input id="f-save" type="checkbox" checked /> Save this session (password stored encrypted by your system)</label>
       </div>
       <div class="row"><button type="button" id="f-cancel">Cancel</button><button id="f-go">Connect</button></div>
     </form>

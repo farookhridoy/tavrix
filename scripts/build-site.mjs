@@ -52,22 +52,29 @@ export function parseRelease(release) {
   const published = new Date(release.published_at);
   if (Number.isNaN(published.getTime())) fail('no publish date');
 
-  const assets = {};
-  for (const arch of ARCHS) {
-    const name = `Tavrix-${version}-${arch}.dmg`;
-    const asset = (Array.isArray(release.assets) ? release.assets : []).find((a) => a && a.name === name);
-    if (!asset) fail(`the ${arch} installer (${name}) is not attached`);
+  const list = Array.isArray(release.assets) ? release.assets : [];
+  /** One installer asset, validated: exact name, exact download address, plausible size, well-formed checksum. */
+  const installer = (name, label, { optional = false } = {}) => {
+    const asset = list.find((a) => a && a.name === name);
+    if (!asset) {
+      if (optional) return null;
+      fail(`the ${label} installer (${name}) is not attached`);
+    }
     const url = `https://github.com/${REPO}/releases/download/${tag}/${name}`;
-    if (asset.browser_download_url !== url) fail(`the ${arch} download address is not the expected one`);
-    if (!Number.isInteger(asset.size) || asset.size < 5 * 1048576 || asset.size > 1024 * 1048576) fail(`the ${arch} installer has an implausible size`);
+    if (asset.browser_download_url !== url) fail(`the ${label} download address is not the expected one`);
+    if (!Number.isInteger(asset.size) || asset.size < 5 * 1048576 || asset.size > 1024 * 1048576) fail(`the ${label} installer has an implausible size`);
     let sha256 = '';
     if (asset.digest !== undefined && asset.digest !== null) {
       const d = /^sha256:([0-9a-f]{64})$/.exec(String(asset.digest));
-      if (!d) fail(`the ${arch} checksum is malformed`);
+      if (!d) fail(`the ${label} checksum is malformed`);
       sha256 = d[1];
     }
-    assets[arch] = { name, url, bytes: asset.size, sha256 };
-  }
+    return { name, url, bytes: asset.size, sha256 };
+  };
+  const assets = {};
+  for (const arch of ARCHS) assets[arch] = installer(`Tavrix-${version}-${arch}.dmg`, arch);
+  // Windows is optional: a release made before the Windows build existed (or without it) simply shows no Windows download.
+  assets.win = installer(`Tavrix-${version}-x64.exe`, 'Windows', { optional: true });
   return { version, tag, releaseUrl, publishedAt: published.toISOString(), assets, highlights: extractHighlights(release.body) };
 }
 
@@ -75,7 +82,7 @@ export function parseRelease(release) {
 export function offlineFacts() {
   const releases = `https://github.com/${REPO}/releases/latest`;
   const asset = (arch) => ({ name: `Tavrix-latest-${arch}.dmg`, url: releases, bytes: 0, sha256: '' });
-  return { version: 'latest', tag: 'latest', releaseUrl: releases, publishedAt: null, assets: { arm64: asset('arm64'), x64: asset('x64') }, highlights: [] };
+  return { version: 'latest', tag: 'latest', releaseUrl: releases, publishedAt: null, assets: { arm64: asset('arm64'), x64: asset('x64'), win: { name: 'Tavrix-latest-x64.exe', url: releases, bytes: 0, sha256: '' } }, highlights: [] };
 }
 
 const longDate = (iso) => (iso ? new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' }) : 'recently');
@@ -98,15 +105,25 @@ export function tokensFor(facts, siteUrl) {
     t[`${arch}_size`] = megabytes(a.bytes);
     t[`${arch}_sha_line`] = a.sha256 ? `SHA-256 ${a.sha256}` : '';
   }
+  const win = facts.assets.win;
+  t.platforms = win ? 'Mac and Windows' : 'Mac';
+  t.platforms_detail = win ? 'macOS (Apple Silicon and Intel) and Windows' : 'macOS, Apple Silicon and Intel';
+  t.os_list = win ? 'macOS, Windows' : 'macOS';
+  t.win_url = win ? win.url : facts.releaseUrl;
+  t.win_name = win ? win.name : '';
+  t.win_size = win ? megabytes(win.bytes) : '';
+  t.win_sha_line = win && win.sha256 ? `SHA-256 ${win.sha256}` : '';
   const raw = new Set(['whatsnew']); // already built from escaped parts
   return Object.fromEntries(Object.entries(t).map(([k, v]) => [k, raw.has(k) ? v : escapeHtml(v)]));
 }
 
 /** Fill the template. An unknown token is a bug in the template, so it fails instead of leaking "{{…}}" onto the site. */
-export function fillTemplate(template, tokens, { hasNews }) {
+export function fillTemplate(template, tokens, { hasNews, hasWindows = true }) {
   let html = template;
   if (!hasNews) html = html.replace(/<!--whatsnew-->[\s\S]*?<!--\/whatsnew-->/g, '');
-  html = html.replace(/<!--\/?whatsnew-->/g, '');
+  // Everything about the Windows download sits between <!--windows--> markers and disappears when the release has none.
+  if (!hasWindows) html = html.replace(/<!--windows-->[\s\S]*?<!--\/windows-->/g, '');
+  html = html.replace(/<!--\/?(whatsnew|windows)-->/g, '');
   return html.replace(/\{\{(\w+)\}\}/g, (_m, name) => {
     if (!Object.hasOwn(tokens, name)) throw new Error(`Template uses an unknown token: {{${name}}}`);
     return tokens[name];
@@ -116,14 +133,16 @@ export function fillTemplate(template, tokens, { hasNews }) {
 export function buildSite({ sourceDir, outDir, facts, siteUrl = DEFAULT_SITE_URL }) {
   const template = readFileSync(join(sourceDir, 'index.html'), 'utf8');
   const tokens = tokensFor(facts, siteUrl);
-  const html = fillTemplate(template, tokens, { hasNews: facts.highlights.length > 0 });
+  const html = fillTemplate(template, tokens, { hasNews: facts.highlights.length > 0, hasWindows: Boolean(facts.assets.win) });
 
   rmSync(outDir, { recursive: true, force: true });
   mkdirSync(outDir, { recursive: true });
   cpSync(sourceDir, outDir, { recursive: true, filter: (src) => !SKIP_FROM_SOURCE.has(src.slice(sourceDir.length + 1)) });
   writeFileSync(join(outDir, 'index.html'), html);
 
-  const downloads = Object.fromEntries(ARCHS.map((a) => [a, { name: facts.assets[a].name, url: facts.assets[a].url, bytes: facts.assets[a].bytes, sha256: facts.assets[a].sha256 }]));
+  const entry = (a) => ({ name: a.name, url: a.url, bytes: a.bytes, sha256: a.sha256 });
+  const downloads = Object.fromEntries(ARCHS.map((a) => [a, entry(facts.assets[a])]));
+  if (facts.assets.win) downloads.windows = entry(facts.assets.win);
   writeFileSync(join(outDir, 'latest.json'), JSON.stringify({ version: facts.version, tag: facts.tag, publishedAt: facts.publishedAt, releaseUrl: facts.releaseUrl, downloads }, null, 2) + '\n');
   writeFileSync(join(outDir, 'robots.txt'), `User-agent: *\nAllow: /\n\nSitemap: ${siteUrl}/sitemap.xml\n`);
   const lastmod = facts.publishedAt ? `<lastmod>${facts.publishedAt.slice(0, 10)}</lastmod>` : '';

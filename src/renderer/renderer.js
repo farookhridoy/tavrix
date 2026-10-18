@@ -3,6 +3,18 @@ const tabs = [];
 let active = null;
 const bySid = new Map();
 
+// The window is shown on a Mac or on Windows. Shortcut labels and a few layout details follow the computer.
+const IS_MAC = window.api.platform === 'darwin';
+document.body.classList.add(IS_MAC ? 'mac' : 'notmac');
+/** On Windows plain Ctrl+B is tmux's prefix key and Ctrl+Shift+B is free, so the panel keys differ from the Mac's. */
+const KEYS = IS_MAC
+  ? { sessions: '⌘B', files: '⌘⇧B', fullEditor: '⌘⇧F', settings: '⌘,', save: '⌘S' }
+  : { sessions: 'Ctrl+Shift+B', files: 'Ctrl+Shift+E', fullEditor: 'Ctrl+Shift+F', settings: 'Ctrl+,', save: 'Ctrl+S' };
+/** Text written with Mac shortcut symbols, shown with this computer's keys. */
+const keysText = (t) => String(t)
+  .replace('⌘⇧B', KEYS.files).replace('⌘B', KEYS.sessions).replace('⌘⇧F', KEYS.fullEditor).replace('⌘,', KEYS.settings).replace('⌘S', KEYS.save);
+for (const n of document.querySelectorAll('[title]')) n.title = keysText(n.title);
+
 function el(tag, cls, text) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -260,7 +272,7 @@ const TERM_THEMES = {
 
 // Replaced by the saved settings as soon as they arrive; these only cover the first instant.
 let settings = {
-  terminal: { fontFamily: 'Menlo, Monaco, "Courier New", monospace', fontSize: 13, theme: 'tavrix-dark', scrollback: 5000, cursorStyle: 'block', cursorBlink: true, copyOnSelect: false },
+  terminal: { fontFamily: 'Menlo, Monaco, Consolas, "Cascadia Mono", "Courier New", monospace', fontSize: 13, theme: 'tavrix-dark', scrollback: 5000, cursorStyle: 'block', cursorBlink: true, copyOnSelect: false },
   connection: { keepAliveSec: 30, compression: false, connectTimeoutSec: 20 },
   defaults: null,
 };
@@ -286,7 +298,7 @@ function applyPrefsToAll() {
   }
 }
 
-const FONT_CHOICES = ['Menlo', 'Monaco', 'SF Mono', 'Courier New', 'JetBrains Mono', 'Fira Code', 'Source Code Pro'];
+const FONT_CHOICES = ['Menlo', 'Monaco', 'SF Mono', 'Consolas', 'Cascadia Mono', 'Courier New', 'JetBrains Mono', 'Fira Code', 'Source Code Pro'];
 
 /** Build the terminal appearance controls. With `withDefault`, every control can be left on "Default" (per-session overrides). */
 function terminalFields(root, prefix, { withDefault }) {
@@ -419,9 +431,9 @@ function createTab(title) {
   tab.execBtn = iconButton('exec', 'Make executable (chmod +x): this file starts with #! but is not executable', () => makeExecutable(tab));
   tab.execBtn.hidden = true;
   const reload = iconButton('reload', 'Reload from the server (discards what is in the editor)', () => reloadFile(tab));
-  const save = iconButton('save', 'Save (⌘S)', () => saveFile(tab));
+  const save = iconButton('save', `Save (${KEYS.save})`, () => saveFile(tab));
   const closeEdit = iconButton('close', 'Close this file (its tab); other open files stay', () => closeDoc(tab, tab.doc));
-  tab.fullBtn = iconButton('expand', 'Full screen editor (⌘⇧F)', toggleFullEditor);
+  tab.fullBtn = iconButton('expand', `Full screen editor (${KEYS.fullEditor})`, toggleFullEditor);
   bar.append(tab.editPathEl, autoLabel, tab.execBtn, reload, save, tab.fullBtn, closeEdit);
   tab.monacoEl = el('div', 'monaco');
   tab.editorEl.append(tab.docTabsEl, bar, tab.monacoEl);
@@ -433,7 +445,7 @@ function createTab(title) {
   tab.cancelBtn = el('button', '', 'Cancel');
   tab.cancelBtn.hidden = true;
   tab.cancelBtn.onclick = () => { tab.cancelBtn.disabled = true; window.api.cancelTransfer(tab.sid); };
-  const sbtn = (label, title, fn) => { const b = el('button', 'sb', label); b.title = title; b.onclick = fn; return b; };
+  const sbtn = (label, title, fn, term = true) => { const b = el('button', term ? 'sb term' : 'sb', label); b.title = title; b.onclick = fn; return b; };
   tab.statusEl.append(
     tab.msgEl, tab.progEl, tab.cancelBtn,
     sbtn('Split →', 'Split the terminal side by side', () => splitPane(tab, 'row')),
@@ -441,12 +453,17 @@ function createTab(title) {
     sbtn('Close pane', 'Close the focused terminal pane', () => closePane(tab, tab.focused)),
     sbtn('Tunnels', 'Port forwarding', () => openTunnels(tab)),
   );
+  // Files-only (SFTP) sessions show this instead of a terminal until a file is opened.
+  tab.emptyEl = el('div', 'sftp-empty');
+  tab.emptyHead = el('strong', '');
+  tab.emptyBody = el('p', '');
+  tab.emptyEl.append(tab.emptyHead, tab.emptyBody);
   tab.hsplit = el('div', 'splitter h hsplit');
   tab.hsplit.setAttribute('role', 'separator');
   tab.hsplit.setAttribute('aria-orientation', 'horizontal');
   tab.hsplit.tabIndex = 0;
   tab.hsplit.title = 'Drag to resize the terminals and the editor; double-click to reset';
-  work.append(tab.termEl, tab.hsplit, tab.editorEl, tab.statusEl);
+  work.append(tab.termEl, tab.hsplit, tab.emptyEl, tab.editorEl, tab.statusEl);
   const fsplit = el('div', 'splitter v fsplit');
   fsplit.setAttribute('role', 'separator');
   fsplit.setAttribute('aria-orientation', 'vertical');
@@ -476,6 +493,19 @@ async function addPane(tab, { shell = true } = {}) {
   pane.term.loadAddon(pane.fit);
   tab.termEl.appendChild(pane.el);
   pane.term.open(pane.el);
+  if (!IS_MAC) {
+    // Like Windows Terminal: Ctrl+C copies only when text is selected (otherwise it is the interrupt key), Ctrl+Shift+C always
+    // copies, and Ctrl+V / Ctrl+Shift+V paste through the browser's own paste event (returning false stops a stray ^V).
+    pane.term.attachCustomKeyEventHandler((e) => {
+      if (e.type !== 'keydown' || !e.ctrlKey || e.altKey || e.metaKey) return true;
+      const k = e.key.toLowerCase();
+      if (k === 'c' && (e.shiftKey || pane.term.hasSelection())) {
+        if (pane.term.hasSelection()) { navigator.clipboard?.writeText(pane.term.getSelection()).catch(() => {}); pane.term.clearSelection(); }
+        return false;
+      }
+      return k !== 'v';
+    });
+  }
   pane.el.addEventListener('mousedown', () => { tab.focused = pane; });
   pane.term.onData((d) => tab.sid && pane.shellId && window.api.write(tab.sid, pane.shellId, d));
   pane.term.onSelectionChange(() => {
@@ -766,7 +796,7 @@ function updateEditorBar(tab) {
   const executable = doc?.stat ? (doc.stat.mode & 0o111) !== 0 : true;
   tab.execBtn.hidden = !(doc && hasShebang(doc) && !executable);
   if (document.body.classList.contains('editor-max')) tab.fullBtn.setIcon('shrink', 'Exit full screen (Esc)');
-  else tab.fullBtn.setIcon('expand', 'Full screen editor (⌘⇧F)');
+  else tab.fullBtn.setIcon('expand', `Full screen editor (${KEYS.fullEditor})`);
 }
 
 function renderDocTabs(tab) {
@@ -1039,10 +1069,24 @@ applyLayout();
 
 /* ---------- connecting ---------- */
 
+/** The message shown in place of the terminal in a files-only session. */
+function sftpMessage(tab, head, body, bad = false) {
+  tab.emptyHead.textContent = head;
+  tab.emptyBody.textContent = body || '';
+  tab.emptyEl.classList.toggle('bad', bad);
+}
+
 async function connect(input, title) {
   const tab = createTab(title);
   tab.msgEl.textContent = 'Connecting...';
   const saved = input.profileId ? profiles.find((p) => p.id === input.profileId) : null;
+  // "sftp" = files and editor only: the connection is made as usual but no remote shell is ever opened.
+  tab.kind = (saved ? saved.kind : input.kind) === 'sftp' ? 'sftp' : 'ssh';
+  if (tab.kind === 'sftp') {
+    tab.pane.classList.add('sftp');
+    tab.header.classList.add('sftp');
+    sftpMessage(tab, 'Connecting…');
+  }
   tab.termOverride = (saved ? saved.terminal : input.terminal) || null;
   const startDir = (saved ? saved.startupDir : input.startupDir) || null;
   for (const pane of tab.panes) applyPrefsToPane(tab, pane);
@@ -1054,6 +1098,10 @@ async function connect(input, title) {
       bySid.set(res.id, tab);
       tab.msgEl.textContent = 'Connected';
       openStartFolder(tab, startDir, res.home);
+      if (tab.kind === 'sftp') {
+        sftpMessage(tab, 'Files only', IS_MAC ? 'Pick a file on the left to edit it. Drag files from Finder onto the list to upload them, or right-click for more.' : 'Pick a file on the left to edit it. Drag files from File Explorer onto the list to upload them, or right-click for more.');
+        return;
+      }
       await addPane(tab);
       return;
     } catch (err) {
@@ -1081,6 +1129,7 @@ async function openStartFolder(tab, startDir, home) {
 
 async function connectFailed(tab, message) {
   tab.msgEl.textContent = 'Failed: ' + message;
+  if (tab.kind === 'sftp') { sftpMessage(tab, 'Connection failed', message, true); return; }
   const pane = tab.panes[0] || (await addPane(tab, { shell: false }));
   pane.term.write('\r\n\x1b[31mConnection failed:\x1b[0m ' + message + '\r\n');
 }
@@ -1128,7 +1177,13 @@ function toggleFolder(name) {
 function sessionRow(p, indent) {
   const li = el('li', indent ? 'indent' : '');
   const info = el('div');
-  info.append(el('div', '', p.name));
+  const nameRow = el('div', '', p.name);
+  if (p.kind === 'sftp') {
+    const badge = el('span', 'kind', 'SFTP');
+    badge.title = 'Files and editor only, no terminal';
+    nameRow.append(' ', badge);
+  }
+  info.append(nameRow);
   const via = p.jumpHostId ? ' via ' + (profiles.find((x) => x.id === p.jumpHostId)?.name ?? '?') : '';
   info.append(el('small', '', `${p.username}@${p.host}${p.port !== 22 ? ':' + p.port : ''}${via}`));
   const tools = el('span', 'tools');
@@ -1195,7 +1250,17 @@ $('sTabs').onclick = (e) => { if (e.target.dataset.tab) showSessionTab(e.target.
 // A required field on another tab would block submit silently; jump to the tab that has the problem.
 $('form').addEventListener('invalid', (e) => { const pane = e.target.closest('.tabpane'); if (pane) showSessionTab(pane.dataset.pane); }, true);
 
-function openSessionDialog(p) {
+/** Files-only sessions have no terminal, so the Terminal tab and the startup command do not apply. */
+function syncKindFields() {
+  const sftp = $('f-kind').value === 'sftp';
+  $('sTabs').querySelector('[data-tab="term"]').hidden = sftp;
+  $('f-scmd-label').hidden = sftp;
+  $('f-sdir-lab').textContent = sftp ? 'Open this folder first' : 'Start in folder (typed as cd in the first terminal)';
+  if (!$('f-id').value) $('dlgTitle').textContent = sftp ? 'New SFTP session' : 'New connection';
+}
+$('f-kind').onchange = syncKindFields;
+
+function openSessionDialog(p, preset = {}) {
   $('form').reset();
   showSessionTab('basic');
   const jump = $('f-jump');
@@ -1206,6 +1271,7 @@ function openSessionDialog(p) {
   dl.textContent = '';
   for (const f of new Set(profiles.map((o) => o.folder).filter(Boolean))) dl.append(new Option(f));
   $('f-id').value = p ? p.id : '';
+  $('f-kind').value = p?.kind === 'sftp' || (!p && preset.kind === 'sftp') ? 'sftp' : 'ssh';
   $('dlgTitle').textContent = p ? 'Edit session' : 'New connection';
   $('f-go').textContent = p ? 'Save' : 'Connect';
   $('f-save').checked = true;
@@ -1225,6 +1291,7 @@ function openSessionDialog(p) {
   $('f-scmd').value = p?.startupCommand ?? '';
   $('f-folder').value = p?.folder ?? '';
   fillTerminalFields('ft', p?.terminal);
+  syncKindFields();
   $('dlg').showModal();
   $('f-host').focus();
 }
@@ -1242,6 +1309,7 @@ function readSessionForm() {
     privateKeyPath: text('f-key'),
     jumpHostId: $('f-jump').value || undefined,
     folder: text('f-folder'),
+    kind: $('f-kind').value === 'sftp' ? 'sftp' : undefined,
     keepAliveSec: num('f-keepalive'),
     compression: $('f-compress').value === '' ? undefined : $('f-compress').value === 'true',
     connectTimeoutSec: num('f-timeout'),
@@ -1275,6 +1343,7 @@ $('f-keybrowse').onclick = async () => applyPickedKey(await window.api.keys.pick
 $('f-key').addEventListener('change', showKeyHint);
 
 $('new').onclick = () => openSessionDialog(null);
+$('newSftp').onclick = () => openSessionDialog(null, { kind: 'sftp' });
 $('f-cancel').onclick = () => $('dlg').close();
 $('form').onsubmit = async (ev) => {
   ev.preventDefault();
@@ -1466,18 +1535,18 @@ window.addEventListener('keydown', (e) => { if (e.key === 'F1') { e.preventDefau
 
 const TOUR_STEPS = [
   { title: 'Welcome to Tavrix', body: 'A terminal, a file manager and a code editor for your servers, in one window. This short tour shows where things are. Close it any time; you can bring it back from the Help menu.' },
-  { target: '#new', title: 'Add a server', body: 'Click + to enter the host and username, then a password, or choose a private key with Browse…. Sessions are saved, and secrets go to the macOS Keychain.' },
+  { target: '#new', title: 'Add a server', body: 'Click + to enter the host and username, then a password, or choose a private key with Browse…. Choose SFTP instead of SSH for a files-only session with no terminal. Sessions are saved, and secrets are stored encrypted by your system.' },
   { target: '#sessionList', fallback: '#sessions', title: 'Your sessions', body: 'Saved sessions appear here. Click one to connect, ✎ to edit it. Put them in folders from the session’s Bookmark tab. Import brings in hosts from ~/.ssh/config.' },
-  { target: '#layoutTools', title: 'Show, hide and resize', body: 'These icons show or hide the sessions sidebar and the file panel (⌘B and ⌘⇧B). Drag any thin divider to resize a panel, or double-click it to reset.' },
+  { target: '#layoutTools', title: 'Show, hide and resize', body: 'These icons show or hide the sessions sidebar and the file panel (' + KEYS.sessions + ' and ' + KEYS.files + '). Drag any thin divider to resize a panel, or double-click it to reset.' },
   { target: '#newSnippet', title: 'Snippets', body: 'Save commands you type often and insert them with one click. Multi-line snippets are pasted, not run, until you press Enter.' },
-  { target: '#gear', title: 'Settings', body: 'Terminal font, theme, scrollback, keep-alive and more. A session can override any of them in its own Terminal and Advanced tabs. Shortcut: ⌘,' },
+  { target: '#gear', title: 'Settings', body: 'Terminal font, theme, scrollback, keep-alive and more. A session can override any of them in its own Terminal and Advanced tabs. Shortcut: ' + KEYS.settings },
   { title: 'Once you are connected', bullets: [
     'Click a folder to open it; double-click a file to edit it.',
     'Right-click a file for download, rename, permissions and delete.',
-    'Drag files from Finder onto the file panel to upload.',
-    'Open several files: each gets its own editor tab. ⌘S saves.',
+    `Drag files from ${IS_MAC ? 'Finder' : 'File Explorer'} onto the file panel to upload.`,
+    `Open several files: each gets its own editor tab. ${KEYS.save} saves.`,
     'Split the terminal, or open Tunnels for port forwarding, from the bar at the bottom.',
-    '⌘⇧F gives the editor the whole window; Esc brings the rest back.',
+    `${KEYS.fullEditor} gives the editor the whole window; Esc brings the rest back.`,
   ] },
   { target: '#helpManual', title: 'Help is one click away', body: 'Manual opens the full documentation right here, with a link to the same pages on GitHub. Quick Tour is in the Help menu if you want to see this again. Enjoy!' },
 ];

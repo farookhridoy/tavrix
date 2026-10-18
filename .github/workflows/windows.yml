@@ -1,0 +1,125 @@
+name: Windows
+
+# Builds the Windows installer on a real Windows machine, runs the tests there, starts the packaged app to prove it comes up,
+# and (when run by hand with a release tag) attaches the installer to that GitHub release.
+#
+#   gh workflow run windows.yml -f tag=v1.8.0
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'scripts/**'
+      - 'build/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - '.github/workflows/windows.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'scripts/**'
+      - 'build/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - '.github/workflows/windows.yml'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to attach the installer to, e.g. v1.8.0 (leave empty to only build)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install (without downloading the Electron app itself; the installer build fetches it)
+        run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      - name: Build and run the app's tests on Windows
+        run: npm test
+      - name: Build the installer
+        run: npx electron-builder --win --publish never
+      - name: Start the packaged app and check that it comes up
+        shell: pwsh
+        run: ./scripts/smoke-test.ps1 -Exe (Join-Path $PWD 'release/win-unpacked/Tavrix.exe') -ExpectPackaged
+      - name: Install with the real installer, start the installed app, then uninstall
+        shell: pwsh
+        run: |
+          $installer = (Get-ChildItem release -Filter 'Tavrix-*.exe' | Select-Object -First 1).FullName
+          if (-not $installer) { throw 'No installer was built' }
+          $dir = Join-Path $env:RUNNER_TEMP 'TavrixInstalled'
+          # NSIS: /S is silent, and /D= (which must come last, unquoted) is the install folder.
+          $p = Start-Process -FilePath $installer -ArgumentList '/S', "/D=$dir" -PassThru
+          if (-not $p.WaitForExit(240000)) { $p.Kill(); throw 'The installer did not finish within 4 minutes' }
+          Write-Host "installer exit code: $($p.ExitCode)"
+          if ($p.ExitCode -ne 0) { throw "The installer failed with exit code $($p.ExitCode)" }
+          $installed = Join-Path $dir 'Tavrix.exe'
+          if (-not (Test-Path $installed)) { throw "The installer did not put Tavrix.exe in $dir" }
+          $lnk = Join-Path $env:APPDATA 'Microsoft/Windows/Start Menu/Programs/Tavrix.lnk'
+          if (-not (Test-Path $lnk)) { throw "No Start menu shortcut at $lnk" }
+          ./scripts/smoke-test.ps1 -Exe $installed -ExpectPackaged
+          $uninstaller = Join-Path $dir 'Uninstall Tavrix.exe'
+          if (-not (Test-Path $uninstaller)) { throw 'The installer did not leave an uninstaller' }
+          Start-Process -FilePath $uninstaller -ArgumentList '/S' | Out-Null
+          $deadline = (Get-Date).AddSeconds(120)
+          while ((Test-Path $installed) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 2 }
+          if (Test-Path $installed) { throw 'The uninstaller did not remove Tavrix.exe' }
+          if (Test-Path $lnk) { throw 'The uninstaller left the Start menu shortcut behind' }
+          Write-Host 'Installed, started and uninstalled cleanly'
+      - name: Checksums
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem release -Filter 'Tavrix-*.exe' | Select-Object -First 1
+          if (-not $exe) { throw 'No installer was built' }
+          $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
+          "$hash  $($exe.Name)" | Out-File -Encoding ascii "release/$($exe.Name).sha256"
+          "### $($exe.Name)`n`n$([math]::Round($exe.Length / 1MB, 1)) MB`n`n SHA-256 ``$hash``" | Out-File -Encoding utf8 -Append $env:GITHUB_STEP_SUMMARY
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: tavrix-windows
+          path: |
+            release/Tavrix-*.exe
+            release/Tavrix-*.exe.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  attach:
+    if: github.event_name == 'workflow_dispatch' && inputs.tag != ''
+    needs: windows
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: write # to start the website rebuild once the installer is attached
+    steps:
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: tavrix-windows
+          path: windows
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then echo "::error::'$TAG' is not a release tag like v1.8.0"; exit 1; fi
+          gh release view "$TAG" --repo "$REPO" > /dev/null
+          gh release upload "$TAG" windows/Tavrix-*.exe windows/Tavrix-*.exe.sha256 --repo "$REPO" --clobber
+          # Attaching a file does not count as editing the release, so ask the website to rebuild itself.
+          gh workflow run site.yml --repo "$REPO"

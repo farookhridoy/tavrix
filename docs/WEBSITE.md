@@ -51,6 +51,6 @@ If you ever need to change this: GitHub → Settings → Rules → Rulesets. To 
 
 ## Security notes
 
-- The page sends no requests to other sites and runs one small script (highlights the likely Mac type). Its content-security policy (in `.htaccess`) forbids everything else.
+- The page sends no requests to other sites and runs one small script (highlights the likely download for your computer and shows the matching install steps). Its content-security policy (in `.htaccess`) forbids everything else.
 - Hidden files, `.git` and the branch note are refused by `.htaccess`; directory listings are off.
 - Release notes are untrusted text: they are escaped before they reach the page.

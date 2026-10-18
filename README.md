@@ -1,12 +1,13 @@
 <h1 align="center">Tavrix</h1>
 
 <p align="center">
-  <b>An SSH terminal, file manager and code editor for your servers, in one Mac window.</b>
+  <b>An SSH terminal, file manager and code editor for your servers, in one window, on Mac and Windows.</b>
 </p>
 
 <p align="center">
   <a href="https://github.com/farookhridoy/tavrix/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/farookhridoy/tavrix?color=3794ff"></a>
   <img alt="macOS" src="https://img.shields.io/badge/macOS-Apple%20Silicon%20%7C%20Intel-lightgrey">
+  <img alt="Windows" src="https://img.shields.io/badge/Windows-10%20and%20later-lightgrey">
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-green"></a>
 </p>
 
@@ -25,7 +26,9 @@
 </p>
 
 > [!IMPORTANT]
-> **The first time you open Tavrix, macOS shows a warning. That is expected.** Tavrix is not signed by a paid Apple Developer account. Click **Done** (not *Move to Trash*), then open **System Settings → Privacy & Security → Open Anyway**. [Step-by-step instructions](#how-to-install-and-open-tavrix).
+> **The first time you open Tavrix, your computer shows a warning. That is expected.** Tavrix is not signed with a paid certificate.
+> **Mac:** click **Done** (not *Move to Trash*), then **System Settings → Privacy & Security → Open Anyway**.
+> **Windows:** on *"Windows protected your PC"* click **More info**, then **Run anyway**. [Step-by-step instructions](#how-to-install-and-open-tavrix).
 
 Tavrix connects to your servers over SSH and gives you everything you reach for in one place: a **terminal**, a **file browser** you can drag files into, and an **editor with tabs** that saves straight back to the server. No separate SFTP client, no copy-pasting paths.
 
@@ -34,27 +37,31 @@ Tavrix connects to your servers over SSH and gives you everything you reach for 
 | | |
 |---|---|
 | **Terminal** | Several shells on one connection, split side by side or stacked, resizable by dragging. Themes, fonts, scrollback. |
-| **File manager** | Click to open folders, drag files from Finder to upload, right-click to download, rename, change permissions or delete. Permissions are kept, so scripts stay executable. |
+| **File manager** | Click to open folders, drag files from Finder or File Explorer to upload, right-click to download, rename, change permissions or delete. Permissions are kept, so scripts stay executable. |
 | **Editor** | A tab per open file, syntax highlighting, auto-save, a warning if the file changed on the server, one-click *make executable*, and a full-screen mode. |
-| **Sessions** | Saved in folders. Passwords and key passphrases are encrypted with the macOS Keychain. Import hosts from `~/.ssh/config`. |
+| **Sessions** | Saved in folders. Passwords and key passphrases are encrypted with your system's secure storage (the macOS Keychain, or Windows' own protection). Import hosts from `~/.ssh/config`. |
+| **SFTP sessions** | A files-only session: the file panel and editor with no terminal, for servers that only allow SFTP (or when you just want to move files). |
 | **Jump hosts** | Reach a private server through a bastion, including chains. |
 | **Tunnels** | Local (`-L`), remote (`-R`) and SOCKS5 (`-D`) port forwarding with a simple form. |
 | **Snippets** | Save commands you type often and insert them with a click. Nothing runs until you press Enter. |
 | **Safe by default** | Server fingerprints are checked and a changed key is blocked. One network connection per session. No telemetry. |
-| **Light** | About 85 MB to download. |
+| **Light** | About 85 MB to download on a Mac, a little more on Windows. |
 
 ## Download and install
 
-Get the installer for your Mac from the **[Releases page](https://github.com/farookhridoy/tavrix/releases/latest)**:
+Get the installer for your computer from the **[Releases page](https://github.com/farookhridoy/tavrix/releases/latest)**:
 
-| Your Mac | File | Size |
+| Your computer | File | Size |
 |---|---|---|
-| Apple Silicon (M1 and later) | `Tavrix-…-arm64.dmg` | about 85 MB |
-| Intel | `Tavrix-…-x64.dmg` | about 96 MB |
+| Mac with Apple Silicon (M1 and later) | `Tavrix-…-arm64.dmg` | about 85 MB |
+| Mac with an Intel processor | `Tavrix-…-x64.dmg` | about 96 MB |
+| Windows 10 or later, 64-bit | `Tavrix-…-x64.exe` | see the release |
 
-Not sure which one? Apple menu → **About This Mac** shows the chip.
+On a Mac, not sure which one? Apple menu → **About This Mac** shows the chip.
 
 ### How to install and open Tavrix
+
+**On a Mac**
 
 > [!IMPORTANT]
 > Do not skip steps 2 and 3. Tavrix is not signed by a paid Apple Developer account, so macOS says **"Apple could not verify "Tavrix" is free of malware…"** the first time you open a downloaded copy. Nothing is wrong with your download, and you only need to do this once.
@@ -64,7 +71,7 @@ Not sure which one? Apple menu → **About This Mac** shows the chip.
 3. **Allow it.** Open **System Settings → Privacy & Security**, scroll down to **Security**, click **Open Anyway** next to Tavrix and enter your password.
 4. **Use it.** Open Tavrix again and click **Open**. Click **+** to add your first server. A short tour starts by itself.
 
-**Prefer Terminal?** Run this once, then open Tavrix normally:
+**Prefer Terminal?** (Mac) Run this once, then open Tavrix normally:
 
 ```
 xattr -dr com.apple.quarantine /Applications/Tavrix.app
@@ -72,19 +79,37 @@ xattr -dr com.apple.quarantine /Applications/Tavrix.app
 
 Seeing *"Tavrix is damaged"* or *"Not Opened"* instead? It is the same thing and the same fix.
 
+**On Windows**
+
+> [!IMPORTANT]
+> Tavrix is not signed with a paid Windows certificate, so your browser and Windows SmartScreen ask you to confirm it the first time. Nothing is wrong with your download, and you only need to do this once.
+
+1. **Download.** Download the `.exe` installer. If your browser says it is not commonly downloaded, choose **Keep**, then **Keep anyway**.
+2. **Run it.** Double-click the installer. If Windows shows *"Windows protected your PC"*, click **More info**, then **Run anyway**.
+3. **Install.** Pick where to install (the default is fine) and finish. Tavrix is added to the Start menu.
+4. **Use it.** Open Tavrix from the Start menu and click **+** to add your first server, or **SFTP** for a files-only session. A short tour starts by itself.
+
 ### Verify your download
 
-Each release lists a SHA-256 checksum for both installers. Compare it with your file's:
+Each release lists a SHA-256 checksum for every installer. Compare it with your file's:
+
+On a Mac (Terminal):
 
 ```
 shasum -a 256 ~/Downloads/Tavrix-*.dmg
+```
+
+On Windows (PowerShell):
+
+```
+Get-FileHash "$HOME\Downloads\Tavrix-*.exe" -Algorithm SHA256
 ```
 
 The two values must match exactly. The source code is open, so you can also [build it yourself](#build-it-yourself).
 
 ### Updates
 
-Tavrix shows a blue bar when a newer version is published, with **Download**, **Release notes**, **Later** and **Skip this version**. It only opens the download page in your browser; it never installs anything by itself. Check any time with **Tavrix menu → Check for Updates…**.
+Tavrix shows a blue bar when a newer version is published, with **Download**, **Release notes**, **Later** and **Skip this version**. It only opens the download page in your browser; it never installs anything by itself. Check any time with **Tavrix menu → Check for Updates…** (on Windows: **File → Check for Updates…**).
 
 ## Quick start
 
@@ -104,9 +129,11 @@ The first time you open Tavrix, a short **quick tour** points out the main contr
 
 Tavrix tells you what you picked: a private key, an encrypted key (it will ask for the passphrase), or a `.pub` file that will not work.
 
+If the server only allows file transfer (or you just want to move files), click **SFTP** next to **+** instead: you get the file panel and the editor, with no terminal. See [SFTP sessions](#sftp-sessions-files-only).
+
 **2. Connect.** Click the session in the sidebar. The first time, Tavrix shows the server's fingerprint and asks whether to trust it.
 
-**3. Work.** Type in the terminal, click folders in the file panel, double-click a file to edit it, and press **⌘S** to save.
+**3. Work.** Type in the terminal, click folders in the file panel, double-click a file to edit it, and press **⌘S** (**Ctrl+S** on Windows) to save.
 
 That is all you need. Everything below is optional.
 
@@ -135,9 +162,13 @@ Put sessions in folders from the session's **Bookmark** tab, give production ser
   <img src="docs/images/split-panes.jpg" alt="Three terminals side by side on one connection" width="900">
 </p>
 
+### SFTP sessions (files only)
+
+Click **SFTP** in the sessions sidebar (or choose *SFTP* as the **Session type** in the New connection dialog). The connection is made exactly like an SSH one, with the same passwords, keys, jump hosts and host-key check, but Tavrix never opens a remote shell. You get the file panel and the editor, and the tab carries a small folder mark. Use it for servers that only allow SFTP, or when you only want to move and edit files. The session shows an **SFTP** tag in the sidebar, and **Start in folder** becomes **Open this folder first**.
+
 ### Files
 
-Click a folder to open it, double-click a file to edit it. Right-click for **Download**, **Rename**, **Permissions** and **Delete**. Drag files or folders from Finder onto the panel to upload them, with a progress bar and a **Cancel** button.
+Click a folder to open it, double-click a file to edit it. Right-click for **Download**, **Rename**, **Permissions** and **Delete**. Drag files or folders from Finder (or File Explorer) onto the panel to upload them, with a progress bar and a **Cancel** button.
 
 ### Edit with tabs
 
@@ -155,7 +186,7 @@ For long stretches in a file, press **⌘⇧F** to give the editor the whole win
 
 ### Port forwarding
 
-**Tunnels** in the status bar opens a form for local, remote and SOCKS5 forwarding. Listening addresses default to your Mac only.
+**Tunnels** in the status bar opens a form for local, remote and SOCKS5 forwarding. Listening addresses default to this computer only.
 
 <p align="center">
   <img src="docs/images/tunnels.png" alt="The Tunnels window with two running tunnels" width="480">
@@ -171,7 +202,7 @@ Save commands you type often. A multi-line snippet is pasted as one block, and n
 
 ### Settings
 
-Open with the **⚙** button or **⌘,**. Font, size, theme (Tavrix Dark, Light, Solarized Dark, Dracula, Monokai), scrollback, cursor, copy on select, and connection defaults. Changes apply to open terminals immediately, and any session can override them.
+Open with the **⚙** button or **⌘,** (**Ctrl+,** on Windows). Font, size, theme (Tavrix Dark, Light, Solarized Dark, Dracula, Monokai), scrollback, cursor, copy on select, and connection defaults. Changes apply to open terminals immediately, and any session can override them.
 
 <p align="center">
   <img src="docs/images/settings.png" alt="The Settings window" width="400">
@@ -179,7 +210,7 @@ Open with the **⚙** button or **⌘,**. Font, size, theme (Tavrix Dark, Light,
 
 ### Show, hide and resize
 
-The two icons at the top left show or hide the sessions sidebar and the file panel (**⌘B** and **⌘⇧B**). Every thin divider can be dragged, and double-clicking a divider resets it. Tavrix remembers your layout.
+The two icons at the top left show or hide the sessions sidebar and the file panel (**⌘B** and **⌘⇧B** on a Mac, **Ctrl+Shift+B** and **Ctrl+Shift+E** on Windows). Every thin divider can be dragged, and double-clicking a divider resets it. Tavrix remembers your layout.
 
 ### Help is built in
 
@@ -191,21 +222,25 @@ The **Manual** button (top right, or **F1**) opens the full documentation inside
 
 ## Keyboard shortcuts
 
-| Action | Shortcut |
-|---|---|
-| Settings | `⌘,` |
-| Show or hide the sessions sidebar | `⌘B` |
-| Show or hide the file panel | `⌘⇧B` |
-| Full-screen editor on or off | `⌘⇧F` |
-| Save the open file | `⌘S` |
-| Open the manual | `F1` |
-| Leave full-screen editor, close the tour | `Esc` |
-| Resize a focused divider | arrow keys (`Shift` for bigger steps) |
-| Reset a divider | double-click it |
+| Action | Mac | Windows |
+|---|---|---|
+| Settings | `⌘,` | `Ctrl+,` |
+| Show or hide the sessions sidebar | `⌘B` | `Ctrl+Shift+B` |
+| Show or hide the file panel | `⌘⇧B` | `Ctrl+Shift+E` |
+| Full-screen editor on or off | `⌘⇧F` | `Ctrl+Shift+F` |
+| Save the open file | `⌘S` | `Ctrl+S` |
+| Copy in the terminal | `⌘C` | `Ctrl+Shift+C`, or `Ctrl+C` when text is selected |
+| Paste in the terminal | `⌘V` | `Ctrl+V` or `Ctrl+Shift+V` |
+| Open the manual | `F1` | `F1` |
+| Leave full-screen editor, close the tour | `Esc` | `Esc` |
+| Resize a focused divider | arrow keys (`Shift` for bigger steps) | same |
+| Reset a divider | double-click it | same |
+
+On Windows plain `Ctrl+C`, `Ctrl+Z`, `Ctrl+R` and `Ctrl+B` go to the program in the terminal (interrupt, suspend, history search, tmux), so the panel shortcuts use `Ctrl+Shift` instead.
 
 ## Your data and privacy
 
-- Everything is stored in `~/Library/Application Support/Tavrix/`: saved sessions (secrets encrypted with the macOS Keychain), trusted server fingerprints, settings and snippets. Delete that folder to start fresh.
+- Everything is stored in `~/Library/Application Support/Tavrix/` on a Mac and `%APPDATA%\Tavrix\` on Windows: saved sessions (secrets encrypted with the macOS Keychain or Windows' own protection), trusted server fingerprints, settings and snippets. Delete that folder to start fresh.
 - Tavrix has **no accounts, analytics or telemetry**. Its only automatic network request is the update check: an anonymous request to `api.github.com` for this project's latest release (at launch, every 12 hours, and when you return to the window after an hour). GitHub sees your IP address. Turn it off with **Tavrix menu → Check for Updates Automatically**.
 - Server fingerprints are verified on first connect. If a trusted server presents a different key, Tavrix blocks the connection.
 - Tavrix opens only one network connection per session, however many terminals, files and tunnels you use.
@@ -215,6 +250,8 @@ The **Manual** button (top right, or **F1**) opens the full documentation inside
 | Problem | What to do |
 |---|---|
 | macOS says Tavrix is "Not Opened" or "damaged" | Click **Done**, then **System Settings → Privacy & Security → Open Anyway**. See [the install steps](#how-to-install-and-open-tavrix). |
+| Windows says "Windows protected your PC" | Click **More info**, then **Run anyway**. Tavrix is open source and not signed with a paid certificate. See [the install steps](#how-to-install-and-open-tavrix). |
+| `Ctrl+C` copies instead of interrupting a program (Windows) | It only copies when text is selected in the terminal; click once to clear the selection, then `Ctrl+C` interrupts. |
 | "Authentication failed" | Check the username and password. If the server only accepts keys, choose your private key (not the `.pub` file). |
 | "Host key has CHANGED" | The server presented a different key than the one you trusted. Do not connect unless you reinstalled it; then remove its entry from `known_hosts.json`. |
 | The connection drops when idle | Lower **Keep-alive** on the session's Advanced tab. |
@@ -237,7 +274,7 @@ npm test             # unit tests, plus integration tests when you give it a tes
 
 The integration tests talk to a real SSH server and are skipped unless you provide one: `TAVRIX_TEST_SSH=host:port:user:/path/to/key npm test`.
 
-To build the installers (unsigned): `CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist` produces `release/Tavrix-<version>-arm64.dmg` and `-x64.dmg`. Signing, notarization and the release steps are in [docs/RELEASING.md](docs/RELEASING.md). The manual shown inside the app is generated from [docs/MANUAL.md](docs/MANUAL.md) during the build.
+To build the Mac installers (unsigned): `CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist` produces `release/Tavrix-<version>-arm64.dmg` and `-x64.dmg`. The Windows installer is built on Windows with `npm run dist:win` (`release/Tavrix-<version>-x64.exe`), and by the **Windows** workflow on GitHub, which also tests the app and starts the packaged build. Signing, notarization and the release steps are in [docs/RELEASING.md](docs/RELEASING.md). The manual shown inside the app is generated from [docs/MANUAL.md](docs/MANUAL.md) during the build.
 
 ```
 src/main/        the app's main process: SSH, SFTP, tunnels, storage, menus, updates

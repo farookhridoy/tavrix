@@ -14,6 +14,8 @@ export interface Profile {
   jumpHostId?: string;
   /** Group in the sidebar. */
   folder?: string;
+  /** "sftp" opens files and editor only, with no terminal and no remote shell. Absent means a normal SSH session. */
+  kind?: 'sftp';
   /** Typed into the first shell after login: `cd` to this folder, then run the command. */
   startupDir?: string;
   startupCommand?: string;
@@ -23,7 +25,7 @@ export interface Profile {
   connectTimeoutSec?: number;
   /** Terminal appearance overrides for this session; undefined fields use the global setting. */
   terminal?: Partial<TerminalPrefs>;
-  /** base64 of safeStorage-encrypted password/passphrase (macOS Keychain-backed). */
+  /** base64 of safeStorage-encrypted password/passphrase (macOS Keychain, or Windows DPAPI). */
   secret?: string;
 }
 
@@ -58,7 +60,7 @@ export function saveProfile(p: Profile, secret?: string): void {
   const prev = getProfile(p.id);
   let enc = prev?.secret;
   if (secret) {
-    if (!safeStorage.isEncryptionAvailable()) throw new Error('Keychain encryption is unavailable; secret not saved');
+    if (!safeStorage.isEncryptionAvailable()) throw new Error('Secure storage is unavailable on this computer; the password was not saved');
     enc = safeStorage.encryptString(secret).toString('base64');
   }
   all.push({ ...p, secret: enc });
