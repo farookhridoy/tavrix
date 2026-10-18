@@ -14,7 +14,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Tavrix">
 <meta property="og:title" content="Tavrix: SSH terminal, file manager and editor for Mac">
-<meta property="og:description" content="One Mac window for your servers: terminal, drag-and-drop files and a tabbed editor. Free and open source.">
+<meta property="og:description" content="One window for your servers: terminal, drag-and-drop files and a tabbed editor. Free and open source, for Mac.">
 <meta property="og:url" content="https://tavrix.farookhridoy.com/">
 <meta property="og:image" content="https://tavrix.farookhridoy.com/og.png">
 <meta property="og:image:width" content="1200">
@@ -28,7 +28,7 @@
   "name": "Tavrix",
   "applicationCategory": "DeveloperApplication",
   "operatingSystem": "macOS",
-  "description": "An SSH terminal, file manager and code editor for your servers in one Mac window.",
+  "description": "An SSH terminal, file manager and code editor for your servers in one window.",
   "license": "https://opensource.org/licenses/MIT",
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
   "author": { "@type": "Person", "name": "MD. Omar Farook Hridoy", "url": "https://farookhridoy.com" },
@@ -58,15 +58,17 @@
 <main>
   <section class="hero">
     <div class="wrap">
-      <p class="eyebrow">For macOS · Free · Open source</p>
+      <p class="eyebrow">For Mac · Free · Open source</p>
       <h1>Your servers,<br>in one window.</h1>
       <p class="lead">Tavrix puts an <strong>SSH terminal</strong>, a <strong>file manager</strong> you can drag files into, and an <strong>editor with tabs</strong> side by side. Connect, change a file, save it straight back to the server.</p>
       <div class="cta" id="hero-cta">
         <a class="btn primary" href="https://github.com/farookhridoy/tavrix/releases/download/v1.7.0/Tavrix-1.7.0-arm64.dmg" data-download="arm64">Download for Apple Silicon</a>
         <a class="btn" href="https://github.com/farookhridoy/tavrix/releases/download/v1.7.0/Tavrix-1.7.0-x64.dmg" data-download="x64">Intel Mac</a>
+        
       </div>
       <p class="meta" id="hero-meta">Version 1.7.0 · macOS, Apple Silicon and Intel · MIT license</p>
-      <p class="first-open"><strong>First time opening it?</strong> macOS will show a warning. That is expected: click <strong>Done</strong>, then <strong>Open Anyway</strong>. <a href="#first-launch">Show me how</a></p>
+      <p class="first-open" data-os="mac"><strong>First time opening it on a Mac?</strong> macOS will show a warning. That is expected: click <strong>Done</strong>, then <strong>Open Anyway</strong>. <a href="#first-launch">Show me how</a></p>
+      
       <figure class="shot hero-shot">
         <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
         <img src="/img/main-window.jpg" alt="The Tavrix window: saved sessions on the left, a file panel and a terminal in the middle, and an editor with several open files below" width="1700" height="1050" fetchpriority="high">
@@ -87,7 +89,7 @@
         <article class="card">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
           <h3>File manager</h3>
-          <p>Click to open folders, drag files in from Finder to upload, right-click to download, rename or change permissions. Scripts stay executable.</p>
+          <p>Click to open folders, drag files in from your computer to upload, right-click to download, rename or change permissions. Scripts stay executable.</p>
         </article>
         <article class="card">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg>
@@ -96,8 +98,8 @@
         </article>
         <article class="card">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
-          <h3>Sessions and Keychain</h3>
-          <p>Save servers in folders. Passwords and key passphrases are encrypted with the macOS Keychain. Import from <code>~/.ssh/config</code>.</p>
+          <h3>Sessions, kept safe</h3>
+          <p>Save servers in folders. Passwords and key passphrases are encrypted with your system's secure storage (the macOS Keychain, or Windows' own protection). Import from <code>~/.ssh/config</code>.</p>
         </article>
         <article class="card">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/><path d="M7 12h3M14 12h3"/></svg>
@@ -172,9 +174,10 @@
           <p class="dl-file"><span data-file="x64">Tavrix-1.7.0-x64.dmg</span> <span data-size="x64">· 97 MB</span></p>
           <p class="dl-sha" data-sha="x64">SHA-256 12e25a63a781318eea809e7c1472e306af6068990bacf3d64737dff6838d5317</p>
         </article>
+        
       </div>
-      <p class="hint">Not sure which one? Open the Apple menu → <strong>About This Mac</strong>. If it says "Chip: Apple M…" choose Apple Silicon; if it says "Processor: Intel…" choose Intel.</p>
-      <p class="hint" id="not-mac" hidden>Tavrix runs on macOS only. You can still bookmark this page for later.</p>
+      <p class="hint" data-os="mac">On a Mac, not sure which one? Open the Apple menu → <strong>About This Mac</strong>. If it says "Chip: Apple M…" choose Apple Silicon; if it says "Processor: Intel…" choose Intel.</p>
+      <p class="hint" id="not-mac" hidden>Tavrix runs on Mac only. You can still bookmark this page for later.</p>
 
 
       
@@ -187,23 +190,31 @@
       <div class="install" id="first-launch" role="note" aria-labelledby="install-title">
         <p class="install-flag">Do not skip this</p>
         <h3 id="install-title">How to install and open Tavrix</h3>
-        <p class="install-lead">Tavrix is not signed by a paid Apple Developer account, so macOS says <em>"Apple could not verify Tavrix is free of malware"</em> the first time you open it. The app is open source, and nothing is wrong with your download. You only need to do this once.</p>
-        <ol class="install-steps">
-          <li><span class="n">1</span><div><strong>Install</strong><p>Open the downloaded <code>.dmg</code> and drag <strong>Tavrix</strong> into <strong>Applications</strong>.</p></div></li>
-          <li><span class="n">2</span><div><strong>Open it once</strong><p>Open Tavrix from Applications. macOS shows the warning. Click <strong>Done</strong>. <em>Do not click Move to Trash.</em></p></div></li>
-          <li><span class="n">3</span><div><strong>Allow it</strong><p>Open <strong>System Settings → Privacy &amp; Security</strong>, scroll down to <strong>Security</strong>, click <strong>Open Anyway</strong> next to Tavrix and enter your password.</p></div></li>
-          <li><span class="n">4</span><div><strong>Use it</strong><p>Open Tavrix again and click <strong>Open</strong>. Click <strong>+</strong> to add your first server. A short tour starts by itself.</p></div></li>
-        </ol>
-        <p class="install-alt"><strong>Prefer Terminal?</strong> Run this once, then open Tavrix normally:</p>
-        <pre><code>xattr -dr com.apple.quarantine /Applications/Tavrix.app</code></pre>
-        <p class="install-alt">Saw <em>"Tavrix is damaged"</em> or <em>"Not Opened"</em> instead? It is the same thing and the same fix.</p>
+        
+
+        <div class="os-steps" data-os="mac">
+          <p class="install-lead">Tavrix is not signed by a paid Apple Developer account, so macOS says <em>"Apple could not verify Tavrix is free of malware"</em> the first time you open it. The app is open source, and nothing is wrong with your download. You only need to do this once.</p>
+          <ol class="install-steps">
+            <li><span class="n">1</span><div><strong>Install</strong><p>Open the downloaded <code>.dmg</code> and drag <strong>Tavrix</strong> into <strong>Applications</strong>.</p></div></li>
+            <li><span class="n">2</span><div><strong>Open it once</strong><p>Open Tavrix from Applications. macOS shows the warning. Click <strong>Done</strong>. <em>Do not click Move to Trash.</em></p></div></li>
+            <li><span class="n">3</span><div><strong>Allow it</strong><p>Open <strong>System Settings → Privacy &amp; Security</strong>, scroll down to <strong>Security</strong>, click <strong>Open Anyway</strong> next to Tavrix and enter your password.</p></div></li>
+            <li><span class="n">4</span><div><strong>Use it</strong><p>Open Tavrix again and click <strong>Open</strong>. Click <strong>+</strong> to add your first server. A short tour starts by itself.</p></div></li>
+          </ol>
+          <p class="install-alt"><strong>Prefer Terminal?</strong> Run this once, then open Tavrix normally:</p>
+          <pre><code>xattr -dr com.apple.quarantine /Applications/Tavrix.app</code></pre>
+          <p class="install-alt">Saw <em>"Tavrix is damaged"</em> or <em>"Not Opened"</em> instead? It is the same thing and the same fix.</p>
+        </div>
+
+        
       </div>
 
       <details class="faq">
         <summary>How do I verify that my download is genuine?</summary>
         <div>
-          <p>Compare the SHA-256 shown above with your file's:</p>
+          <p>Compare the SHA-256 shown above with your file's.</p>
+          <p><strong>On a Mac</strong> (Terminal):</p>
           <pre><code>shasum -a 256 ~/Downloads/Tavrix-*.dmg</code></pre>
+          
           <p>You can also read the source and build it yourself: <a href="https://github.com/farookhridoy/tavrix#build-it-yourself">build instructions</a>.</p>
         </div>
       </details>
@@ -215,7 +226,7 @@
       <h2>Questions</h2>
       <details class="faq"><summary>Is it really free?</summary><div><p>Yes. Tavrix is open source under the MIT license. There are no accounts and no paid tier.</p></div></details>
       <details class="faq"><summary>Does it send my data anywhere?</summary><div><p>No telemetry, no analytics. Its only automatic network request is an anonymous check for a newer version on GitHub, which you can turn off. Passwords are encrypted with the macOS Keychain, and everything else goes only to the servers you connect to.</p></div></details>
-      <details class="faq"><summary>Windows or Linux?</summary><div><p>Not at the moment. Tavrix is built for macOS, for both Apple Silicon and Intel Macs.</p></div></details>
+      <details class="faq"><summary>Is there a Linux version?</summary><div><p>Not at the moment. Tavrix is built for Mac.</p></div></details>
       <details class="faq"><summary>Where do I learn how to use it?</summary><div><p>A quick tour starts on first launch, and the <strong>Manual</strong> button inside the app opens the full documentation. The same pages are online in the <a href="/manual">manual on GitHub</a>.</p></div></details>
       <details class="faq"><summary>My server blocks my IP after a few minutes. Is that Tavrix?</summary><div><p>That is usually a security rule on the server (such as fail2ban) or its provider. Tavrix uses a single connection per session, so it makes fewer connections than most tools. The <a href="/manual">manual's troubleshooting section</a> shows how to find the cause.</p></div></details>
     </div>
