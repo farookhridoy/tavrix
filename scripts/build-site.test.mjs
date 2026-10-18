@@ -212,13 +212,15 @@ test('the Windows parts of the page appear only when there is a Windows installe
     assert.match(yes.html, new RegExp(`SHA-256 ${SHA_W}`));
     assert.match(yes.html, /Windows protected your PC/);
     assert.match(yes.html, /Get-FileHash/);
+    assert.match(yes.html, /src="\/img\/windows\.jpg"/, 'the Windows screenshot is shown');
+    assert.ok(existsSync(join(dir, 'yes', 'img', 'windows.jpg')), 'and shipped with the site');
     assert.match(yes.html, /for Mac and Windows<\/title>/);
     assert.match(yes.html, /"operatingSystem": "macOS, Windows"/);
     assert.equal(yes.latest.downloads.windows.sha256, SHA_W);
 
     const no = build('no', release());
     assert.ok(!/\{\{|\}\}|<!--\/?(windows|whatsnew)-->/.test(no.html), 'no leftover markers');
-    assert.ok(!/data-arch="win"|Windows protected your PC|Get-FileHash|os-tabs/.test(no.html), 'no Windows download, steps or switch');
+    assert.ok(!/data-arch="win"|Windows protected your PC|Get-FileHash|os-tabs|windows\.jpg/.test(no.html), 'no Windows download, steps, switch or screenshot');
     assert.match(no.html, /for Mac<\/title>/);
     assert.match(no.html, /"operatingSystem": "macOS"/);
     assert.equal(no.latest.downloads.windows, undefined);
