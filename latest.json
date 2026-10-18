@@ -1,20 +1,20 @@
 {
-  "version": "1.7.0",
-  "tag": "v1.7.0",
-  "publishedAt": "2026-10-15T07:43:29.000Z",
-  "releaseUrl": "https://github.com/farookhridoy/tavrix/releases/tag/v1.7.0",
+  "version": "1.8.0",
+  "tag": "v1.8.0",
+  "publishedAt": "2026-10-18T17:05:18.000Z",
+  "releaseUrl": "https://github.com/farookhridoy/tavrix/releases/tag/v1.8.0",
   "downloads": {
     "arm64": {
-      "name": "Tavrix-1.7.0-arm64.dmg",
-      "url": "https://github.com/farookhridoy/tavrix/releases/download/v1.7.0/Tavrix-1.7.0-arm64.dmg",
-      "bytes": 90734188,
-      "sha256": "9f2c0dd2907b1e9d793aca7ee7b0dc60706223a22e005c8b849aeddbf7ab02c7"
+      "name": "Tavrix-1.8.0-arm64.dmg",
+      "url": "https://github.com/farookhridoy/tavrix/releases/download/v1.8.0/Tavrix-1.8.0-arm64.dmg",
+      "bytes": 90743464,
+      "sha256": "103a3f4eb006a996c4804960317eb25041456de5f083056fae1583843245450f"
     },
     "x64": {
-      "name": "Tavrix-1.7.0-x64.dmg",
-      "url": "https://github.com/farookhridoy/tavrix/releases/download/v1.7.0/Tavrix-1.7.0-x64.dmg",
-      "bytes": 102082784,
-      "sha256": "12e25a63a781318eea809e7c1472e306af6068990bacf3d64737dff6838d5317"
+      "name": "Tavrix-1.8.0-x64.dmg",
+      "url": "https://github.com/farookhridoy/tavrix/releases/download/v1.8.0/Tavrix-1.8.0-x64.dmg",
+      "bytes": 102071968,
+      "sha256": "4b0b78064f9fa77d926fd2729d9ddf8419b92e51ca20d4a36c8059958806e71c"
     }
   }
 }
