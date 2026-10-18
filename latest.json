@@ -15,6 +15,12 @@
       "url": "https://github.com/farookhridoy/tavrix/releases/download/v1.8.0/Tavrix-1.8.0-x64.dmg",
       "bytes": 102071968,
       "sha256": "4b0b78064f9fa77d926fd2729d9ddf8419b92e51ca20d4a36c8059958806e71c"
+    },
+    "windows": {
+      "name": "Tavrix-1.8.0-x64.exe",
+      "url": "https://github.com/farookhridoy/tavrix/releases/download/v1.8.0/Tavrix-1.8.0-x64.exe",
+      "bytes": 106301514,
+      "sha256": "36f0120d1b206542ef5bf29014a4eb4465cf1af0b52347ed651a11cccef3fc43"
     }
   }
 }

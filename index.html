@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tavrix: SSH terminal, file manager and editor for Mac</title>
-<meta name="description" content="Tavrix is a free Mac app that puts an SSH terminal, a drag-and-drop file manager and a tabbed code editor in one window. Open source, no telemetry.">
+<title>Tavrix: SSH terminal, file manager and editor for Mac and Windows</title>
+<meta name="description" content="Tavrix is a free Mac and Windows app that puts an SSH terminal, a drag-and-drop file manager and a tabbed code editor in one window. Open source, no telemetry.">
 <meta name="author" content="MD. Omar Farook Hridoy">
 <meta name="theme-color" content="#1b1b1d">
 <meta name="color-scheme" content="dark">
@@ -13,8 +13,8 @@
 <link rel="canonical" href="https://tavrix.farookhridoy.com/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Tavrix">
-<meta property="og:title" content="Tavrix: SSH terminal, file manager and editor for Mac">
-<meta property="og:description" content="One window for your servers: terminal, drag-and-drop files and a tabbed editor. Free and open source, for Mac.">
+<meta property="og:title" content="Tavrix: SSH terminal, file manager and editor for Mac and Windows">
+<meta property="og:description" content="One window for your servers: terminal, drag-and-drop files and a tabbed editor. Free and open source, for Mac and Windows.">
 <meta property="og:url" content="https://tavrix.farookhridoy.com/">
 <meta property="og:image" content="https://tavrix.farookhridoy.com/og.png">
 <meta property="og:image:width" content="1200">
@@ -27,7 +27,7 @@
   "@type": "SoftwareApplication",
   "name": "Tavrix",
   "applicationCategory": "DeveloperApplication",
-  "operatingSystem": "macOS",
+  "operatingSystem": "macOS, Windows",
   "description": "An SSH terminal, file manager and code editor for your servers in one window.",
   "license": "https://opensource.org/licenses/MIT",
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
@@ -58,17 +58,17 @@
 <main>
   <section class="hero">
     <div class="wrap">
-      <p class="eyebrow">For Mac · Free · Open source</p>
+      <p class="eyebrow">For Mac and Windows · Free · Open source</p>
       <h1>Your servers,<br>in one window.</h1>
       <p class="lead">Tavrix puts an <strong>SSH terminal</strong>, a <strong>file manager</strong> you can drag files into, and an <strong>editor with tabs</strong> side by side. Connect, change a file, save it straight back to the server.</p>
       <div class="cta" id="hero-cta">
         <a class="btn primary" href="https://github.com/farookhridoy/tavrix/releases/download/v1.8.0/Tavrix-1.8.0-arm64.dmg" data-download="arm64">Download for Apple Silicon</a>
         <a class="btn" href="https://github.com/farookhridoy/tavrix/releases/download/v1.8.0/Tavrix-1.8.0-x64.dmg" data-download="x64">Intel Mac</a>
-        
+        <a class="btn" href="https://github.com/farookhridoy/tavrix/releases/download/v1.8.0/Tavrix-1.8.0-x64.exe" data-download="win">Windows</a>
       </div>
-      <p class="meta" id="hero-meta">Version 1.8.0 · macOS, Apple Silicon and Intel · MIT license</p>
+      <p class="meta" id="hero-meta">Version 1.8.0 · macOS (Apple Silicon and Intel) and Windows · MIT license</p>
       <p class="first-open" data-os="mac"><strong>First time opening it on a Mac?</strong> macOS will show a warning. That is expected: click <strong>Done</strong>, then <strong>Open Anyway</strong>. <a href="#first-launch">Show me how</a></p>
-      
+      <p class="first-open" data-os="win"><strong>First time opening it on Windows?</strong> Windows may say "Windows protected your PC". That is expected: click <strong>More info</strong>, then <strong>Run anyway</strong>. <a href="#first-launch">Show me how</a></p>
       <figure class="shot hero-shot">
         <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
         <img src="/img/main-window.jpg" alt="The Tavrix window: saved sessions on the left, a file panel and a terminal in the middle, and an editor with several open files below" width="1700" height="1050" fetchpriority="high">
@@ -175,9 +175,17 @@
           <p class="dl-sha" data-sha="x64">SHA-256 4b0b78064f9fa77d926fd2729d9ddf8419b92e51ca20d4a36c8059958806e71c</p>
         </article>
         
+        <article class="dl" data-arch="win">
+          <h3>Windows</h3>
+          <p class="dl-note">Windows 10 or later, 64-bit</p>
+          <a class="btn" href="https://github.com/farookhridoy/tavrix/releases/download/v1.8.0/Tavrix-1.8.0-x64.exe" data-download="win">Download for Windows</a>
+          <p class="dl-file"><span data-file="win">Tavrix-1.8.0-x64.exe</span> <span data-size="win">· 101 MB</span></p>
+          <p class="dl-sha" data-sha="win">SHA-256 36f0120d1b206542ef5bf29014a4eb4465cf1af0b52347ed651a11cccef3fc43</p>
+        </article>
+        
       </div>
       <p class="hint" data-os="mac">On a Mac, not sure which one? Open the Apple menu → <strong>About This Mac</strong>. If it says "Chip: Apple M…" choose Apple Silicon; if it says "Processor: Intel…" choose Intel.</p>
-      <p class="hint" id="not-mac" hidden>Tavrix runs on Mac only. You can still bookmark this page for later.</p>
+      <p class="hint" id="not-mac" hidden>Tavrix runs on Mac and Windows only. You can still bookmark this page for later.</p>
 
 
       
@@ -190,6 +198,11 @@
       <div class="install" id="first-launch" role="note" aria-labelledby="install-title">
         <p class="install-flag">Do not skip this</p>
         <h3 id="install-title">How to install and open Tavrix</h3>
+        
+        <div class="os-tabs" id="os-tabs" role="group" aria-label="Choose your computer" hidden>
+          <button type="button" data-os="mac" aria-pressed="true">macOS</button>
+          <button type="button" data-os="win" aria-pressed="false">Windows</button>
+        </div>
         
 
         <div class="os-steps" data-os="mac">
@@ -206,6 +219,17 @@
         </div>
 
         
+        <div class="os-steps" data-os="win">
+          <p class="install-lead">Tavrix is not signed with a paid Windows certificate, so your browser and Windows SmartScreen ask you to confirm it the first time. The app is open source, and nothing is wrong with your download. You only need to do this once.</p>
+          <ol class="install-steps">
+            <li><span class="n">1</span><div><strong>Download</strong><p>Download the <code>.exe</code> installer. If your browser says it is not commonly downloaded, choose <strong>Keep</strong>, then <strong>Keep anyway</strong>.</p></div></li>
+            <li><span class="n">2</span><div><strong>Run it</strong><p>Double-click the installer. If Windows shows <em>"Windows protected your PC"</em>, click <strong>More info</strong>, then <strong>Run anyway</strong>.</p></div></li>
+            <li><span class="n">3</span><div><strong>Install</strong><p>Pick where to install (the default is fine) and finish. Tavrix is added to the Start menu.</p></div></li>
+            <li><span class="n">4</span><div><strong>Use it</strong><p>Open Tavrix from the Start menu and click <strong>+</strong> to add your first server, or <strong>SFTP</strong> for a files-only session. A short tour starts by itself.</p></div></li>
+          </ol>
+          <p class="install-alt">Keys that clash with the terminal are different on Windows: panels use <strong>Ctrl+Shift+B</strong> and <strong>Ctrl+Shift+E</strong>, and <strong>Ctrl+C</strong> copies only when text is selected (otherwise it interrupts the running program).</p>
+        </div>
+        
       </div>
 
       <details class="faq">
@@ -214,7 +238,8 @@
           <p>Compare the SHA-256 shown above with your file's.</p>
           <p><strong>On a Mac</strong> (Terminal):</p>
           <pre><code>shasum -a 256 ~/Downloads/Tavrix-*.dmg</code></pre>
-          
+          <p><strong>On Windows</strong> (PowerShell):</p>
+          <pre><code>Get-FileHash "$HOME\Downloads\Tavrix-*.exe" -Algorithm SHA256</code></pre>
           <p>You can also read the source and build it yourself: <a href="https://github.com/farookhridoy/tavrix#build-it-yourself">build instructions</a>.</p>
         </div>
       </details>
@@ -226,7 +251,7 @@
       <h2>Questions</h2>
       <details class="faq"><summary>Is it really free?</summary><div><p>Yes. Tavrix is open source under the MIT license. There are no accounts and no paid tier.</p></div></details>
       <details class="faq"><summary>Does it send my data anywhere?</summary><div><p>No telemetry, no analytics. Its only automatic network request is an anonymous check for a newer version on GitHub, which you can turn off. Passwords are encrypted with the macOS Keychain, and everything else goes only to the servers you connect to.</p></div></details>
-      <details class="faq"><summary>Is there a Linux version?</summary><div><p>Not at the moment. Tavrix is built for Mac.</p></div></details>
+      <details class="faq"><summary>Is there a Linux version?</summary><div><p>Not at the moment. Tavrix is built for Mac and Windows.</p></div></details>
       <details class="faq"><summary>Where do I learn how to use it?</summary><div><p>A quick tour starts on first launch, and the <strong>Manual</strong> button inside the app opens the full documentation. The same pages are online in the <a href="/manual">manual on GitHub</a>.</p></div></details>
       <details class="faq"><summary>My server blocks my IP after a few minutes. Is that Tavrix?</summary><div><p>That is usually a security rule on the server (such as fail2ban) or its provider. Tavrix uses a single connection per session, so it makes fewer connections than most tools. The <a href="/manual">manual's troubleshooting section</a> shows how to find the cause.</p></div></details>
     </div>
