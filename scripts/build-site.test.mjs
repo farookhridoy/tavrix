@@ -159,3 +159,68 @@ test('the server config blocks hidden files, sets security headers, and its shor
   for (const target of ht.match(/https:\/\/[^\s\]]+/g).filter((u) => !u.includes('schemas'))) assert.ok(target.startsWith(`https://github.com/${REPO}`), target);
   assert.ok(existsSync(join(root, 'site', '404.html')));
 });
+
+// ---------- Windows installer (optional asset) ----------
+const SHA_W = 'c'.repeat(64);
+const winAsset = (over = {}) => ({
+  name: 'Tavrix-1.7.0-x64.exe', size: 95_000_000, digest: `sha256:${SHA_W}`,
+  browser_download_url: `https://github.com/${REPO}/releases/download/v1.7.0/Tavrix-1.7.0-x64.exe`, ...over,
+});
+const withWindows = (over) => release({ assets: [...release().assets, winAsset(over)] });
+
+test('a Windows installer, when attached, is read and checked like the Mac ones', () => {
+  const f = parseRelease(withWindows());
+  assert.equal(f.assets.win.sha256, SHA_W);
+  assert.equal(f.assets.win.bytes, 95_000_000);
+  const t = tokensFor(f, 'https://x.example');
+  assert.match(t.win_url, /Tavrix-1\.7\.0-x64\.exe$/);
+  assert.equal(t.win_size, '91 MB');
+  assert.equal(t.platforms, 'Mac and Windows');
+  assert.equal(t.os_list, 'macOS, Windows');
+});
+
+test('a release with no Windows installer is still valid: it just offers no Windows download', () => {
+  const f = parseRelease(release());
+  assert.equal(f.assets.win, null);
+  const t = tokensFor(f, 'https://x.example');
+  assert.equal(t.platforms, 'Mac');
+  assert.equal(t.win_name, '');
+  assert.equal(t.win_sha_line, '');
+  assert.equal(t.win_url, f.releaseUrl, 'any stray Windows link falls back to the release page');
+});
+
+test('a bad Windows asset is refused just like a bad Mac one', () => {
+  assert.throws(() => parseRelease(withWindows({ browser_download_url: 'https://evil.example/Tavrix-1.7.0-x64.exe' })), /Windows download address/);
+  assert.throws(() => parseRelease(withWindows({ size: 100 })), /Windows installer has an implausible size/);
+  assert.throws(() => parseRelease(withWindows({ digest: 'sha256:nope' })), /Windows checksum is malformed/);
+  // a differently named .exe is not "the" installer; it is ignored rather than trusted
+  assert.equal(parseRelease(release({ assets: [...release().assets, winAsset({ name: 'setup.exe', browser_download_url: `https://github.com/${REPO}/releases/download/v1.7.0/setup.exe` })] })).assets.win, null);
+});
+
+test('the Windows parts of the page appear only when there is a Windows installer', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'tavrix-site-win-'));
+  try {
+    const build = (name, rel) => {
+      const out = join(dir, name);
+      buildSite({ sourceDir: join(root, 'site'), outDir: out, facts: parseRelease(rel), siteUrl: 'https://tavrix.example' });
+      return { html: readFileSync(join(out, 'index.html'), 'utf8'), latest: JSON.parse(readFileSync(join(out, 'latest.json'), 'utf8')) };
+    };
+    const yes = build('yes', withWindows());
+    assert.ok(!/\{\{|\}\}|<!--\/?(windows|whatsnew)-->/.test(yes.html), 'no leftover markers');
+    assert.match(yes.html, /data-arch="win"/);
+    assert.match(yes.html, new RegExp(`href="https://github\\.com/${REPO}/releases/download/v1\\.7\\.0/Tavrix-1\\.7\\.0-x64\\.exe"`));
+    assert.match(yes.html, new RegExp(`SHA-256 ${SHA_W}`));
+    assert.match(yes.html, /Windows protected your PC/);
+    assert.match(yes.html, /Get-FileHash/);
+    assert.match(yes.html, /for Mac and Windows<\/title>/);
+    assert.match(yes.html, /"operatingSystem": "macOS, Windows"/);
+    assert.equal(yes.latest.downloads.windows.sha256, SHA_W);
+
+    const no = build('no', release());
+    assert.ok(!/\{\{|\}\}|<!--\/?(windows|whatsnew)-->/.test(no.html), 'no leftover markers');
+    assert.ok(!/data-arch="win"|Windows protected your PC|Get-FileHash|os-tabs/.test(no.html), 'no Windows download, steps or switch');
+    assert.match(no.html, /for Mac<\/title>/);
+    assert.match(no.html, /"operatingSystem": "macOS"/);
+    assert.equal(no.latest.downloads.windows, undefined);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

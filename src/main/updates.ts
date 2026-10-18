@@ -7,7 +7,7 @@ export interface UpdateInfo {
   current: string;
   latest: string;
   releaseUrl: string;
-  /** Direct link to the macOS installer when the release has one. */
+  /** Direct link to the installer for this computer (macOS .dmg or Windows .exe) when the release has one. */
   downloadUrl?: string;
   notes: string;
 }
@@ -54,12 +54,16 @@ interface Asset {
   browser_download_url?: unknown;
 }
 
-/** Prefer the installer built for this CPU ('arm64' | 'x64'), then a universal one, then any .dmg. */
-function pickInstaller(assets: unknown, arch: string): string | undefined {
+/**
+ * The installer for this computer: a .dmg on macOS, an .exe on Windows. Prefer the one built for this CPU
+ * ('arm64' | 'x64'), then a universal one, then any of the right kind.
+ */
+export function pickInstaller(assets: unknown, arch: string, platform: string = process.platform): string | undefined {
   if (!Array.isArray(assets)) return undefined;
-  const dmgs = (assets as Asset[]).filter((a) => typeof a?.name === 'string' && /\.dmg$/i.test(a.name) && isTrustedUrl(a.browser_download_url));
-  const named = (re: RegExp) => dmgs.find((a) => re.test(a.name as string));
-  const best = named(new RegExp(`[-_.]${arch}\\.dmg$`, 'i')) ?? named(/universal/i) ?? dmgs[0];
+  const ext = platform === 'win32' ? 'exe' : 'dmg';
+  const files = (assets as Asset[]).filter((a) => typeof a?.name === 'string' && new RegExp(`\\.${ext}$`, 'i').test(a.name) && isTrustedUrl(a.browser_download_url));
+  const named = (re: RegExp) => files.find((a) => re.test(a.name as string));
+  const best = named(new RegExp(`[-_.]${arch}\\.${ext}$`, 'i')) ?? named(/universal/i) ?? files[0];
   return best?.browser_download_url as string | undefined;
 }
 
@@ -69,6 +73,7 @@ export async function checkForUpdate(
   url: string = FEED_URL,
   timeoutMs = 8000,
   arch: string = process.arch,
+  platform: string = process.platform,
 ): Promise<UpdateResult> {
   const have = parseVersion(current);
   if (!have) return { kind: 'error', message: `This build has an unrecognised version (${current})` };
@@ -101,7 +106,7 @@ export async function checkForUpdate(
       current,
       latest: latest.join('.'),
       releaseUrl: body.html_url,
-      downloadUrl: pickInstaller(body.assets, arch),
+      downloadUrl: pickInstaller(body.assets, arch, platform),
       notes: typeof body.body === 'string' ? body.body.slice(0, 1500) : '',
     },
   };

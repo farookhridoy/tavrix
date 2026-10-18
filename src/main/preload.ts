@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
 contextBridge.exposeInMainWorld('api', {
+  platform: process.platform,
   connect: (input: unknown) => ipcRenderer.invoke('ssh:connect', input),
   openShell: (id: string, cols: number, rows: number) => ipcRenderer.invoke('ssh:open-shell', id, cols, rows),
   write: (id: string, shellId: string, data: string) => ipcRenderer.send('ssh:write', id, shellId, data),

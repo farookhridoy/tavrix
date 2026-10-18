@@ -17,7 +17,7 @@ export interface TerminalPrefs {
 }
 
 export const DEFAULT_TERMINAL: TerminalPrefs = {
-  fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+  fontFamily: 'Menlo, Monaco, Consolas, "Cascadia Mono", "Courier New", monospace',
   fontSize: 13,
   theme: 'tavrix-dark',
   scrollback: 5000,
@@ -90,4 +90,9 @@ export function startupInput(dir?: string, command?: string): string {
   if (dir && oneLine(dir)) lines.push(`cd -- ${shellQuote(oneLine(dir))}`);
   if (command && oneLine(command)) lines.push(oneLine(command));
   return lines.map((l) => l + '\r').join('');
+}
+
+/** "sftp" is a files-only session (no terminal); anything else is a normal SSH session, stored as nothing. */
+export function sanitizeKind(v: unknown): 'sftp' | undefined {
+  return v === 'sftp' ? 'sftp' : undefined;
 }

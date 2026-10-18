@@ -1,14 +1,16 @@
 * { box-sizing: border-box; }
 html, body { overflow: hidden; }
-body { margin: 0; height: 100vh; display: flex; flex-direction: column; font: 13px -apple-system, sans-serif; background: #1e1e1e; color: #ddd; }
+body { margin: 0; height: 100vh; display: flex; flex-direction: column; font: 13px -apple-system, 'Segoe UI', system-ui, sans-serif; background: #1e1e1e; color: #ddd; }
 button, input { font: inherit; }
 button { background: #333; color: #ddd; border: 1px solid #484848; border-radius: 4px; padding: 3px 8px; cursor: pointer; }
 button:hover { background: #3d3d3d; }
 input[type=text], input:not([type]), input[type=password], input[type=number] { background: #1e1e1e; color: #ddd; border: 1px solid #444; padding: 5px 7px; border-radius: 4px; }
-#titlebar { height: 28px; -webkit-app-region: drag; background: #262626; flex: none; display: flex; align-items: center; padding-left: 84px; }
+#titlebar { height: 28px; -webkit-app-region: drag; background: #262626; flex: none; display: flex; align-items: center; padding-left: 10px; }
+/* macOS draws its traffic lights over the left end of this strip; Windows has its own title bar above it. */
+body.mac #titlebar { padding-left: 84px; }
 #app { flex: 1; display: flex; min-height: 0; }
 #sessions { width: var(--sessions-w, 220px); flex: none; border-right: 0; display: flex; flex-direction: column; background: #232323; }
-#sessions .head { display: flex; justify-content: space-between; align-items: center; padding: 8px; }
+#sessions .head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; padding: 8px; }
 #sessions .head span { display: flex; gap: 4px; }
 #sessionList { list-style: none; margin: 0; padding: 0; overflow: auto; flex: 1; }
 #sessionList li { padding: 5px 10px; cursor: pointer; display: flex; justify-content: space-between; gap: 6px; }
@@ -216,3 +218,14 @@ body.editor-max .splitter { display: none; }
 
 /* Full-screen editor: the terminals are hidden, so the editor must take all the space whatever share it had beside them. */
 body.editor-max .pane.active .editor { flex-grow: 1 !important; }
+
+/* ---------- files-only (SFTP) sessions ---------- */
+#sessionList .kind { font-size: 9px; font-weight: 600; letter-spacing: .06em; color: #4ec9b0; border: 1px solid #2f6f62; border-radius: 3px; padding: 0 4px; vertical-align: 1px; }
+.tab.sftp span:first-child::before { content: '🗂 '; font-size: 11px; }
+.sftp-empty { display: none; }
+.pane.sftp .terms, .pane.sftp .hsplit, .pane.sftp .sb.term { display: none; }
+.pane.sftp .work:has(> .editor[hidden]) > .sftp-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; color: #888; padding: 24px; }
+.sftp-empty strong { color: #ccc; font-size: 15px; font-weight: 600; }
+.sftp-empty p { margin: 0; max-width: 420px; line-height: 1.5; }
+.sftp-empty.bad strong { color: #f48771; }
+.pane.sftp .editor { flex-grow: 1 !important; border-top: 0; }

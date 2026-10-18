@@ -46,7 +46,13 @@
 - [x] "Make executable" for files that start with `#!` but are not executable
 - [x] Refuses to open binary, non-UTF-8 or >5 MB files as text (saving would corrupt them)
 
-## v1.7.0 (current): layout, editor tabs, tour and manual
+## v1.8.0 (current): Windows and SFTP sessions
+- [x] Windows 10+ build (NSIS installer), Windows menu bar and keys that leave Ctrl+C/B/R/Z to the terminal, Windows-aware shortcut labels
+- [x] Windows workflow on GitHub: tests, installer, packaged-app start-up check, attach to a release
+- [x] SFTP sessions: files and editor only, no shell
+- [x] Website and docs for both systems
+
+## v1.7.0: layout, editor tabs, tour and manual
 - [x] Resizable panels, show/hide icons, full-screen editor, editor tabs with icon buttons
 - [x] Quick tour on first launch, Help menu, in-app manual (generated from docs/MANUAL.md)
 - [x] README rewritten with screenshots
@@ -68,7 +74,9 @@
 - [x] Check for Updates menu item, automatic checks can be turned off, versions can be skipped
 
 ## Next
-- [ ] More session types: SFTP-only, FTP, Telnet, then VNC/RDP launchers
+- [ ] More session types: FTP, Telnet, then VNC/RDP launchers (SFTP-only shipped in 1.8.0)
+- [ ] Signed Windows installer (needs a code-signing certificate; unsigned builds show SmartScreen's warning)
+- [ ] Windows on ARM and Linux builds
 - [ ] Saved tunnels that start with a session; prompt for jump-host secrets
 - [ ] Nested split layouts; mixed row/column
 - [ ] Atomic save (write to a temp file, then rename) to survive a dropped connection mid-save
