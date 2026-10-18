@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseVersion, isNewer, isTrustedUrl, checkForUpdate, openTarget, FetchLike, REPO } from './updates';
+import { parseVersion, isNewer, isTrustedUrl, checkForUpdate as check, openTarget, FetchLike, REPO } from './updates';
+
+/** These tests are about the Mac installer, so they pin the platform; the default is whatever computer runs the tests (CI runs them on Windows too). */
+const checkForUpdate = (current: string, f: FetchLike, url?: string, timeoutMs = 8000, arch = 'arm64') => check(current, f, url, timeoutMs, arch, 'darwin');
 
 const release = (over: Record<string, unknown> = {}) => ({
   tag_name: 'v1.2.0',
@@ -89,7 +92,7 @@ test('the installer matching this Mac is chosen: arm64, x64, universal, then any
   // (macOS is the default platform in these tests; Windows is covered below.)
   const asset = (name: string) => ({ name, browser_download_url: `https://github.com/${REPO}/releases/download/v1.2.0/${name}` });
   const pick = async (names: string[], arch: string) => {
-    const r = await checkForUpdate('1.1.0', reply(200, release({ assets: names.map(asset) })), undefined, 8000, arch, 'darwin');
+    const r = await checkForUpdate('1.1.0', reply(200, release({ assets: names.map(asset) })), undefined, 8000, arch);
     return r.kind === 'available' ? r.info.downloadUrl?.split('/').pop() : undefined;
   };
   const both = ['Tavrix-1.2.0-x64.dmg', 'Tavrix-1.2.0-arm64.dmg', 'Tavrix-1.2.0-arm64.dmg.blockmap'];
@@ -103,7 +106,7 @@ test('the installer matching this Mac is chosen: arm64, x64, universal, then any
 test('on Windows the .exe installer is chosen, never a .dmg or a blockmap', async () => {
   const asset = (name: string) => ({ name, browser_download_url: `https://github.com/${REPO}/releases/download/v1.8.0/${name}` });
   const pick = async (names: string[], arch = 'x64') => {
-    const r = await checkForUpdate('1.7.0', reply(200, release({ tag_name: 'v1.8.0', html_url: `https://github.com/${REPO}/releases/tag/v1.8.0`, assets: names.map(asset) })), undefined, 8000, arch, 'win32');
+    const r = await check('1.7.0', reply(200, release({ tag_name: 'v1.8.0', html_url: `https://github.com/${REPO}/releases/tag/v1.8.0`, assets: names.map(asset) })), undefined, 8000, arch, 'win32');
     return r.kind === 'available' ? r.info.downloadUrl?.split('/').pop() : undefined;
   };
   const all = ['Tavrix-1.8.0-arm64.dmg', 'Tavrix-1.8.0-x64.dmg', 'Tavrix-1.8.0-x64.exe', 'Tavrix-1.8.0-x64.exe.blockmap'];
@@ -113,7 +116,7 @@ test('on Windows the .exe installer is chosen, never a .dmg or a blockmap', asyn
   assert.equal(await pickOnMac(all), 'Tavrix-1.8.0-x64.dmg', 'the Mac still gets its dmg from the same release');
 
   async function pickOnMac(names: string[]) {
-    const r = await checkForUpdate('1.7.0', reply(200, release({ tag_name: 'v1.8.0', html_url: `https://github.com/${REPO}/releases/tag/v1.8.0`, assets: names.map(asset) })), undefined, 8000, 'x64', 'darwin');
+    const r = await check('1.7.0', reply(200, release({ tag_name: 'v1.8.0', html_url: `https://github.com/${REPO}/releases/tag/v1.8.0`, assets: names.map(asset) })), undefined, 8000, 'x64', 'darwin');
     return r.kind === 'available' ? r.info.downloadUrl?.split('/').pop() : undefined;
   }
 });

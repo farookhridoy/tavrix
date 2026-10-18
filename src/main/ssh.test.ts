@@ -84,6 +84,7 @@ test('key files are recognised without reading their contents back, and ~ means 
   assert.equal(expandHome('~'), homedir());
   assert.equal(expandHome('~/.ssh/id'), join(homedir(), '.ssh/id'));
   assert.equal(expandHome('/abs/~/x'), '/abs/~/x');
+  if (process.platform === 'win32') assert.equal(expandHome('~\\.ssh\\id'), join(homedir(), '.ssh', 'id'), 'the Windows spelling of ~ works too');
   assert.equal(expandHome('~other/x'), '~other/x', 'only the current user shorthand is expanded');
   assert.ok(loadPrivateKey(join(dir, 'priv')), 'a plain path still loads');
 });
