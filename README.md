@@ -25,6 +25,11 @@
   <img src="docs/images/main-window.jpg" alt="The Tavrix window: saved sessions on the left, a file panel, a terminal and an editor with tabs" width="900">
 </p>
 
+<p align="center">
+  <img src="docs/images/windows-main-window.jpg" alt="Tavrix on Windows: the same window with the standard Windows title bar and menu" width="900">
+  <br><sub>On Windows: the same app, with the standard Windows title bar and menu.</sub>
+</p>
+
 > [!IMPORTANT]
 > **The first time you open Tavrix, your computer shows a warning. That is expected.** Tavrix is not signed with a paid certificate.
 > **Mac:** click **Done** (not *Move to Trash*), then **System Settings → Privacy & Security → Open Anyway**.
